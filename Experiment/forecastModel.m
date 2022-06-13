@@ -3,6 +3,12 @@
 classdef forecastModel
     
     properties
+        
+        % ========== TITLE ==========
+        
+        % title
+        ttl;
+        
         % ========== DATA ==========
         
         % numeric features
@@ -32,6 +38,10 @@ classdef forecastModel
         score_pred                      % NEDOC Score (0-200)
         level_pred                      % NEDOC Level (1-5)
         
+        % other sets
+        avg_score_daily                 % set of averages for each day
+        avg_level_daily                 % avg level for day
+        
         % ========== MODELING ============
         
         % forecast models
@@ -42,9 +52,6 @@ classdef forecastModel
         % split
         today                           % index of today (marks end of training set)
         tomorrow                        % index of tomorrow (marks beginning of testing set)
-        
-        % title
-        ttl;
         
     end
     
@@ -64,6 +71,9 @@ classdef forecastModel
             this.level = TC.Level;
             
             this.ttl = ttl;
+            
+            this.avg_score_daily = this.fillDailyAvgs();
+            this.avg_level_daily = getLevel(this.avg_score_daily);
         end
         
         function this = rawModelInput(this,mdl)
@@ -82,13 +92,16 @@ classdef forecastModel
         function this = setSplit(this,td,bias)      % bias is a bool indicating whether to add bias feature
             [m,~] = size(this.date);
             if isa(td,'double')
-                this.today = td;
-                [~,s] = this.getDay(this.today);
-                this.tomorrow = this.today+s;
+                [idcs,s] = this.getDay(td);
+                
+                this.today = min(idcs)+s-1;
+                this.tomorrow = this.today+1;
             elseif isa(td,'datetime')
-                this.today = datenum(td);
-                [~,s] = this.getDay(this.today);
-                this.tomorrow = this.today+s;
+                tdl = datenum(td);
+                [idcs,s] = this.getDay(tdl);
+                
+                this.today = min(idcs)+s-1;
+                this.tomorrow = this.today+1;
             end
             
             this.X = [this.date this.time this.wkday this.month];
@@ -139,54 +152,97 @@ classdef forecastModel
             this.level_pred = getLevel(this.score_pred);
         end
         
-        function plotfig = generateRegPlots(this,startday,numdays)
+        function avgScore = fillDailyAvgs(this)
+            [m,~] = size(this.date);
+            
+            avgScore = [];
+            idcurr = 1;
+            while idcurr < m
+                [dayIdcs,dayLen] = this.getDay(idcurr);
+                avgScore = [avgScore ; mean(this.score(dayIdcs))];
+                idcurr = idcurr + dayLen;
+            end
+        end
+        
+        function plotfig = generateRegPlots(this,startday,numdays,varargin)
+            
+            figChoice = 0;
+            for i = 1:2:length(varargin)
+                if strcmp('PlotType',varargin{i})
+                    switch varargin{i+1}
+                        case 'daily'
+                            figChoice = 0;
+                        case 'weekly'
+                            figChoice = 1;
+%                         case ''
+                    end
+                end
+            end
+            
+            figttl = this.ttl;
             
             if isa(startday,'datetime')
                 startday = datenum(startday);
             end
             
             if startday < this.tomorrow
-                fprintf('WARNING: some days predicted may be part of training set!')
+                fprintf('WARNING: some value predicted may be part of training set')
+                figttl = ['(WARNING! Training Data Present!) ',figttl];
             end
             
-            idcurr = startday;
-            
-            plotfig = figure('NumberTitle','off','Name',this.ttl);
-            
-            for i = 1:numdays
+            if figChoice==0
                 
-                [dayIdcs,dayLen] = this.getDay(idcurr);
-                acc = 100 * sum(this.level(dayIdcs) == this.level_pred(dayIdcs)) / dayLen;
+                idcurr = startday;
                 
-                subplot(ceil(sqrt(numdays)),ceil(sqrt(numdays)),i)
-                hold on
+                plotfig = figure('NumberTitle','off','Name',[figttl,' Daily Plots']);
                 
-                plot(this.score(dayIdcs), 'b-')
-                
-                plot(this.score_pred(dayIdcs), 'r--')
-                
-                super_suit = ones(size(this.score(dayIdcs)));
-                plot(20*super_suit,'y:');
-                plot(60*super_suit,'y:');
-                plot(100*super_suit,'y:');
-                plot(140*super_suit,'y:');
-                plot(200*super_suit,'y:');
-                
-                ttl = ...
-                    [this.wkdayNames(idcurr,:) ', ' datestr(this.dtArr(idcurr)) ': Acc = '...
-                    num2str(acc) '%' ', dayLen = ' num2str(dayLen)];
-                title(ttl)
-                xlabel('observations (~1 per 30 minutes)')
-                ylabel('NEDOC Score')
-                legend('Actual','Predictor','NEDOC Levels')
-                axis([1, dayLen, 0, 200])
-                
-                hold off
-                
-                idcurr = dayIdcs(dayLen) + 1;
+                for i = 1:numdays
+                    
+                    [dayIdcs,dayLen] = this.getDay(idcurr);
+                    acc = 100 * sum(this.level(dayIdcs) == this.level_pred(dayIdcs)) / dayLen;
+                    
+                    subplot(ceil(sqrt(numdays)),ceil(sqrt(numdays)),i)
+                    hold on
+                    
+                    plot(this.score(dayIdcs), 'b-')
+                    
+                    plot(this.score_pred(dayIdcs), 'r--')
+                    
+                    super_suit = ones(size(this.score(dayIdcs)));
+                    lspec = 'g:';
+                    plot(20*super_suit,lspec);
+                    plot(60*super_suit,lspec);
+                    plot(100*super_suit,lspec);
+                    plot(140*super_suit,lspec);
+                    plot(200*super_suit,lspec);
+                    
+                    td=0;
+                    if(sum(find(this.today==dayIdcs)) ~= 0)
+                        xline(dayLen-1,'k-','LineWidth',10)
+                        td = 1;
+                    end
+                    
+                    plttl = ...
+                        [this.wkdayNames(idcurr,:) ', ' datestr(this.dtArr(idcurr)) ': Acc = '...
+                        num2str(acc) '%' ', dayLen = ' num2str(dayLen)];
+                    title(plttl)
+                    xlabel('observations (~1 per 30 minutes)')
+                    ylabel('NEDOC Score')
+                    if td
+                        legend('Actual','Predictor','NEDOC Levels','Today')
+                    else
+                        legend('Actual','Predictor','NEDOC Levels')
+                    end
+                    axis([1, dayLen, 0, 200])
+                    
+                    hold off
+                    
+                    idcurr = dayIdcs(dayLen) + 1;
+                    
+                end
                 
             end
-
+            
         end
         
     end
