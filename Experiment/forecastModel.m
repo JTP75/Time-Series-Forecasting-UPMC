@@ -21,6 +21,8 @@ classdef forecastModel
         % non-numeric features
         dtArr                           % dateTimeArray (as datetime object)
         wkdayNames                      % weekday names
+        dtArr_Imp                       % imputed variants
+        wkdayNames_Imp
         
         % target responses
         score                           % NEDOC Score (0-200)
@@ -34,6 +36,14 @@ classdef forecastModel
         y_train                         % training split of y
         y_test                          % testing split of y
         
+        % imputed symbolic values
+        X_Imp                           % imputed data matrix
+        y_Imp                           % imputed response vector
+        X_train_Imp                     % training split of X
+        X_test_Imp                      % testing split of X
+        y_train_Imp                     % training split of y
+        y_test_Imp                      % testing split of y
+        
         % predicted responses
         score_pred                      % NEDOC Score (0-200)
         level_pred                      % NEDOC Level (1-5)
@@ -41,6 +51,12 @@ classdef forecastModel
         % other sets
         avg_score_daily                 % set of averages for each day
         avg_level_daily                 % avg level for day
+        
+        % day type clustering
+        X_clust_all
+        X_clust                         % can only be trained on TRAINING DATA!!!!! (data leakage)
+        dayClass
+        dayClass_DEF
         
         % ========== MODELING ============
         
@@ -52,12 +68,14 @@ classdef forecastModel
         % split
         today                           % index of today (marks end of training set)
         tomorrow                        % index of tomorrow (marks beginning of testing set)
+        tdimp
+        tmrimp
         
     end
     
     methods
         
-        function this = forecastModel(TC,ttl)   % ctor
+        function this = forecastModel(TC,ttl,bias)   % ctor
             this.dtNum = TC.Date_Time;
             this.date = TC.Date;
             this.time = TC.Time;
@@ -74,6 +92,25 @@ classdef forecastModel
             
             this.avg_score_daily = this.fillDailyAvgs();
             this.avg_level_daily = getLevel(this.avg_score_daily);
+            
+            this.X = [this.date this.time this.wkday this.month];
+            this.y = this.score;
+            if bias
+                this.X = [ones(size(this.date)) this.X];
+            end
+            
+            y_NaN = [];
+            i = 1;
+            while i < length(this.date)
+                [dayIdcs,dayLen] = this.getDay(i);
+                [X_Imp_,dtArr_Imp_,wkdayNames_Imp_,y_NaN_] = this.saturate(dayIdcs);
+                this.X_Imp = [this.X_Imp ; X_Imp_];
+                this.dtArr_Imp = [this.dtArr_Imp ; dtArr_Imp_];
+                this.wkdayNames_Imp = [this.wkdayNames_Imp ; wkdayNames_Imp_];
+                y_NaN = [y_NaN ; y_NaN_];
+                i = i + dayLen;
+            end
+            this.y_Imp = fillHoles(y_NaN);
         end
         
         function this = rawModelInput(this,mdl)
@@ -89,30 +126,26 @@ classdef forecastModel
             end
         end
         
-        function this = setSplit(this,td,bias)      % bias is a bool indicating whether to add bias feature
+        function this = setSplit(this,td)
             [m,~] = size(this.date);
-            if isa(td,'double')
-                [idcs,s] = this.getDay(td);
-                
-                this.today = min(idcs)+s-1;
-                this.tomorrow = this.today+1;
-            elseif isa(td,'datetime')
-                tdl = datenum(td);
-                [idcs,s] = this.getDay(tdl);
-                
-                this.today = min(idcs)+s-1;
-                this.tomorrow = this.today+1;
-            end
+            [idcs,~] = this.getDay(td);
             
-            this.X = [this.date this.time this.wkday this.month];
-            this.y = this.score;
-            if bias
-                this.X = [ones(size(this.date)) this.X];
-            end
+            this.today = max(idcs);
+            this.tomorrow = this.today+1;
+            
+            this.tdimp = find(this.X_Imp(:,2)==this.date(this.today), 1, 'last' ); % FIX ME IF BIAS GONE
+            this.tmrimp = this.tdimp+1;
+            [mi,~] = size(this.X_Imp);
+            
             this.X_train = this.X(1:this.today,:);
             this.y_train = this.y(1:this.today);
             this.X_test = this.X(this.tomorrow:m,:);
             this.y_test = this.y(this.tomorrow:m);
+            
+            this.X_train_Imp = this.X_Imp(1:this.tdimp,:);
+            this.y_train_Imp = this.y_Imp(1:this.tdimp);
+            this.X_test_Imp = this.X_Imp(this.tmrimp:mi,:);
+            this.y_test_Imp = this.y_Imp(this.tmrimp:mi);
             
         end
         
@@ -225,6 +258,101 @@ classdef forecastModel
             
         end
         
+        function [X48pt_,dtArr_,wkdayNames_,y48pt_NaN] = saturate(this,dayInterval)
+            % function returns days as 48 point column vectors, filling in missing score values with NaN
+            M = 48;     % num of obs per day
+            dayLen = length(dayInterval);
+            
+            % instantiate arrays
+            timeArrIn = zeros([M,1]);
+            timeArrIn(1:dayLen) = this.time(dayInterval);
+            timeArrCorrected = (0:1/M:.99)';
+            
+            scoreArrOut = zeros([M,1]) + NaN;
+            scoreArrOut(1:dayLen) = this.score(dayInterval);
+            
+            % fit data to 24 hour (48 points) day, leaving NaNs for missing values
+            for i = 1:M
+                if timeArrCorrected(i) >= timeArrIn(i)+.0001 || timeArrCorrected(i) <= timeArrIn(i)-.0001
+                    timeArrIn(i:M) = circshift(timeArrIn(i:M),1);
+                    scoreArrOut(i:M) = circshift(scoreArrOut(i:M),1);
+                end
+            end
+            
+            % x matrix
+            [~,nf] = size(this.X);
+            X48pt_ = ones([M,nf]);
+            X48pt_(:,2) = X48pt_(:,2) * this.date(dayInterval(21));
+            X48pt_(:,3) = timeArrCorrected;
+            X48pt_(:,4) = X48pt_(:,4) * this.wkday(dayInterval(21));
+            X48pt_(:,5) = X48pt_(:,5) * this.month(dayInterval(21));
+            
+            % non-numeric
+            dtArr_ = this.dtArr(dayInterval(21)) + zeros([M,1]);
+            wkdayNames_ = this.wkdayNames(dayInterval(21),:) + zeros([M,3]);
+            
+            % response
+            y48pt_NaN = scoreArrOut;
+        end
+        
+        function listOut = desaturate(this,listIn)
+            XI = this.X_Imp;
+            XO = this.X;
+            mO = length(this.y);
+            mI = length(listIn);
+            
+            for i = 1:mO
+                while XI(i,3) <= XO(i,3) - 0.01 || XI(i,3) >= XO(i,3) + 0.01
+                    XI(i:mI,:) = circshift(XI(i:mI,:),-1,1);
+                    listIn(i:mI) = circshift(listIn(i:mI),-1,1);
+                end
+            end
+            listOut = listIn(1:mO);
+        end
+        
+        function this = createClusteringSet(this)
+            M = 48;
+            nd_all = length(this.y_Imp)/M;
+            ndays = this.tdimp/M;                               % e.g. td = 25000 -> tdimp = 27600 -> 575 days in train set
+            this.X_clust = zeros([ndays,M]);
+            this.X_clust_all = zeros([nd_all,M]);
+            for i = 0:nd_all-1
+                this.X_clust_all(i+1,:) = this.y_Imp( (M*i+1):(M*(i+1)) );
+                if i < ndays
+                    this.X_clust(i+1,:) = this.y_Imp( (M*i+1):(M*(i+1)) );
+                end
+            end
+        end
+        
+        function this = kmeansDayClusters(this)
+            m = length(this.y);
+            this = this.createClusteringSet;
+            clList = kmeans(this.X_clust,16,'distance','sqeuclidean','Replicates',50);
+            K = max(clList);
+            meanFork = zeros([K,48]);
+            for k = 1:K
+                kidcs = find(clList==k);
+                meanFork(k,:) = mean(this.X_clust(kidcs,:),1);
+            end
+            
+            this.dayClass = zeros([length(this.y_Imp)/48,1]);
+            for i = 1:length(this.y_Imp)/48
+                dists = pdist2(this.X_clust_all(i,:),meanFork,'squaredeuclidean');
+                [~,this.dayClass(i)] = min(dists);
+            end
+            this.dayClass_DEF = meanFork;
+            
+        end
+        
+        function ypDEORD = predForClustiffier(this)
+            L = length(this.dayClass);
+            yp = [];
+            for i = 1:L
+                yp = [yp this.dayClass_DEF(this.dayClass(i,:),:)];
+            end
+            ypDEORD = yp';
+        end
+        
         function plotfig = generateRegPlots(this,startday,nplots,varargin)
             
             figChoice = 'day';
@@ -235,7 +363,7 @@ classdef forecastModel
                             figChoice = 'day';
                         case 'weekly'
                             figChoice = 'week';
-%                         case ''
+                            %                         case ''
                     end
                 end
             end

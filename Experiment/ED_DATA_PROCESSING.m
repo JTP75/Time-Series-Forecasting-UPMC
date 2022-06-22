@@ -1,16 +1,17 @@
 %% ======================================================================== CLEAR & CLOSE ================================
 
 clc
-clear all
+clearvars -except T TC
 close all
 
 %% ======================================================================== READ TABLE ===================================
 
 if ~exist('T','var')
-    cd ..
+%     cd ..
     T = readtable('PUH NEDOC.xlsx');
-    cd Experiment
+%     cd Experiment
 end
+TC = loadCleanTable();
 
 %% ======================================================================== LOAD DATA ====================================
 
@@ -42,67 +43,69 @@ T(:,23) = array2table(weekday_num);
 
 %% ======================================================================== IMPUTATION ===================================
 
-M = 48;             % desired num of smpls per day
-timeImp = [];
-wkdNumImp = [];
-wkdNameImp = [];
-monthImp = [];
-dtNumImp = [];
-dtDtmImp = [];
-scoreImp = [];
 
-dayTmImp = ((1:M)' - 1)/M;
 
-MTdayArr = zeros([M,1]);
-MTstrArr = strings([M,3]);
-MTdtmArr = NaT([M,1]);
-
-i = 1;
-while i <= mSmpls
-    [dayInt,wkd,dayLen] = extractDay(weekday_num,i);
-    dayScore = imputeScores(timeNum,score,dayInt,dayLen);
-    dayMonth = month(i);
-    dayDtNum = dateNum(i);
-    for o = 1:M
-        dayDtDtm(o,1) = dateArr(i);
-    end
-        
-    timeImp = [ timeImp ; dayTmImp ];
-    wkdNumImp = [ wkdNumImp ; MTdayArr+wkd ];
-    wkdNameImp = [ wkdNameImp ; MTstrArr+getWeekday(wkd) ];
-    monthImp = [ monthImp ; MTdayArr+dayMonth ];
-    dtNumImp = [ dtNumImp ; MTdayArr+dayDtNum ];
-    dtDtmImp = [ dtDtmImp ; dayDtDtm ];
-    scoreImp = [ scoreImp ; dayScore ];
-    
-    i=i+dayLen;
-end
-[mImp,~] = size(scoreImp);
-bfImp = ones([mImp,1]);
-
-%% ======================================================================== FILL MATRICES AND SPLIT DATA =================
-
-X = [biasFeature dateNum timeNum weekday_num month];
-XImp = [bfImp dtNumImp timeImp wkdNumImp monthImp];
-% X = [dateNum timeNum weekday_num month];
-yreg = score;
-ycls = getLevel(score);
-
-t = dtNumImp + timeImp;
-
-yregImp = scoreImp;
-yclsImp = getLevel(scoreImp);
-
-addend = 1000;
-today = round(3*mSmpls/4 + addend);
-tdImp = find(dtNumImp==dateNum(today), 1);
-% data points before today are training, after are testing
-
-%% ======================================================================== NEW DATASTORE FOR DLTBOX =====================
-
-dsTable = table(t,scoreImp);
-writetable(dsTable,'ImputedTSData.xlsx');
-ds = datastore('ImputedTSData.xlsx');
+% M = 48;             % desired num of smpls per day
+% timeImp = [];
+% wkdNumImp = [];
+% wkdNameImp = [];
+% monthImp = [];
+% dtNumImp = [];
+% dtDtmImp = [];
+% scoreImp = [];
+% 
+% dayTmImp = ((1:M)' - 1)/M;
+% 
+% MTdayArr = zeros([M,1]);
+% MTstrArr = strings([M,3]);
+% MTdtmArr = NaT([M,1]);
+% 
+% i = 1;
+% while i <= mSmpls
+%     [dayInt,wkd,dayLen] = extractDay(weekday_num,i);
+%     dayScore = imputeScores(timeNum,score,dayInt,dayLen);
+%     dayMonth = month(i);
+%     dayDtNum = dateNum(i);
+%     for o = 1:M
+%         dayDtDtm(o,1) = dateArr(i);
+%     end
+%         
+%     timeImp = [ timeImp ; dayTmImp ];
+%     wkdNumImp = [ wkdNumImp ; MTdayArr+wkd ];
+%     wkdNameImp = [ wkdNameImp ; MTstrArr+getWeekday(wkd) ];
+%     monthImp = [ monthImp ; MTdayArr+dayMonth ];
+%     dtNumImp = [ dtNumImp ; MTdayArr+dayDtNum ];
+%     dtDtmImp = [ dtDtmImp ; dayDtDtm ];
+%     scoreImp = [ scoreImp ; dayScore ];
+%     
+%     i=i+dayLen;
+% end
+% [mImp,~] = size(scoreImp);
+% bfImp = ones([mImp,1]);
+% 
+% %% ======================================================================== FILL MATRICES AND SPLIT DATA =================
+% 
+% X = [biasFeature dateNum timeNum weekday_num month];
+% XImp = [bfImp dtNumImp timeImp wkdNumImp monthImp];
+% % X = [dateNum timeNum weekday_num month];
+% yreg = score;
+% ycls = getLevel(score);
+% 
+% t = dtNumImp + timeImp;
+% 
+% yregImp = scoreImp;
+% yclsImp = getLevel(scoreImp);
+% 
+% addend = 1000;
+% today = round(3*mSmpls/4 + addend);
+% tdImp = find(dtNumImp==dateNum(today), 1);
+% % data points before today are training, after are testing
+% 
+% %% ======================================================================== NEW DATASTORE FOR DLTBOX =====================
+% 
+% dsTable = table(t,scoreImp);
+% writetable(dsTable,'ImputedTSData.xlsx');
+% ds = datastore('ImputedTSData.xlsx');
 
 %% ======================================================================== REGRESSORS ===================================
 
@@ -276,33 +279,116 @@ end
 
 %% ======================================================================== **ARIMA** ====================================
 
+scoreImp = myModel.y_Imp;
 mdl_ARIMA_Template = arima('MALags',1:2,'SMALags',12);
 mdl_ARIMA_Estimate = estimate(mdl_ARIMA_Template,scoreImp);
 yp_ARIMA = forecast(mdl_ARIMA_Estimate,30,scoreImp);
 
-%% ======================================================================== CLASSIFIERS ==================================
+%% ======================================================================== **CLASS TESTING** ============================
 
-%% KNN
+myModel = forecastModel(T_clean,'Model',1);
+myModel = myModel.setSplit(25000);
+myModel = myModel.createClusteringSet;
+myModel = myModel.kmeansDayClusters;
 
-days = 9;
-interval = 41;
+ypdeord = myModel.predForClustiffier;
 
-idcurr = today;
-k = 19;
-knnModelCl = fitcknn(X(1:today,:), ycls(1:today), 'NumNeighbors', k);
-for i = 1:days
-    dayIdcs = idcurr : idcurr + interval;
-    Xq = X(dayIdcs,:);
-    yclsq = ycls(dayIdcs);
-    
-    yp_KNN = predict(knnModelCl,Xq);
-    
-    accKNN(i) = sum(yp_KNN == yclsq)/(interval+1)*100;
-    fprintf(['Day: ' weekday_name(idcurr+5,:) '\taccKNN = %.2f%%\n'], accKNN(i))
-    
-    idcurr = idcurr + interval;
+
+%% HAC
+
+X = myModel.X_clust;
+
+% dists = pdist(X,'cityblock');
+% linkage_matrix = linkage(dists,'average');
+% 
+% CCC = cophenet(linkage_matrix,dists);       % Cophenetic Correlation Coefficient
+% IC = inconsistent(linkage_matrix);          % inconsistency coefficients
+% 
+% dendy = figure('NumberTitle','off','Name','Dendrogram Figure');
+% dendrogram(linkage_matrix);
+% ttl = ['CCC = ', num2str(CCC)];
+% axis([0 32 0 linkage_matrix(length(linkage_matrix),3)*1.1])
+% title(ttl)
+% 
+% C = 100000;
+% hold on
+% plot(C*ones([100,1]),'k-.')
+% hold off
+
+% clList = cluster(linkage_matrix,'Cutoff',C,'Criterion','distance');
+clList = kmeans(X,16,'distance','sqeuclidean','Replicates',50);
+
+K = max(clList);
+% disp('Num of Classes:')
+% disp(K)
+
+%% clustered days' plots
+
+figure('NumberTitle','off','Name','Day-Class All Curves')
+meanFork = zeros([K,48]);
+for k = 1:K
+    kidcs = find(clList==k);
+    meanFork(k,:) = mean(X(kidcs,:),1);
+    subplot(ceil(sqrt(K)),ceil(sqrt(K)),k)
+    axis([1,48,0,200])
+    hold on
+    dayCount = 0;
+    for i = 1:length(X)
+        if clList(i) == k
+            plot(X(i,:))
+            dayCount = dayCount + 1;
+        end
+    end
+    plot(meanFork(k,:),'k-','LineWidth',3)
+    ttl = ['Num of Days Plotted = ' num2str(dayCount)];
+    title(ttl)
+    hold off
 end
-fprintf('\n')
+
+%% plotting days predictions
+
+dayz = myModel.X_clust_all;
+resp = myModel.dayClass;
+labelDefs = myModel.dayClass_DEF;
+
+npls = 9;
+strt = 30;
+figure('NumberTitle','off','Name','Clustered Day plots')
+for n = 1:npls
+    subplot(ceil(sqrt(npls)),ceil(sqrt(npls)),n)
+    hold on
+    axis([1,48,0,200]);
+    plot(dayz(strt+n,:));
+    plot(labelDefs(resp(strt+n),:))
+    acc(n) = sum(getLevel(dayz(strt+n,:))==getLevel(labelDefs(resp(strt+n),:)))/48;
+    ttl = ['acc = ' num2str(acc(n))];
+    title(ttl)
+    hold off
+end
+
+%% day mapping
+
+for i = 1:575
+    X_day = (1:48)';
+    y_day(:,i) = X(i,:)';
+    X_cos = [ones([48,1]),cos(pi/24 * X_day),cos(pi/24 * X_day + 5),cos(pi/24 * X_day + 10),cos(pi/24 * X_day + 20)];
+    
+    theta(:,i) = pinv(X_cos'*X_cos)*(X_cos'*y_day(:,i));
+    ypred(:,i) = X_cos * theta(:,i);
+    
+    err(i) = sum((ypred(:,i)-y_day(:,i)).^2)/48;
+end
+
+[errs,idcs] = sort(err);
+errp = [idcs',errs']
+
+
+idx = 67
+plot(y_day(:,idx))
+hold on
+plot(ypred(:,idx))
+axis([1,48,0,200])
+hold off
 
 %% ======================================================================== MUTUAL INFO ==================================
 
