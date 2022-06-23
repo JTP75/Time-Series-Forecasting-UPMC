@@ -102,12 +102,14 @@ classdef forecastModel
             this.avg_score_daily = this.fillDailyAvgs();
             this.avg_level_daily = getLevel(this.avg_score_daily);
             
+            % X and y
             this.X = [this.date this.time this.wkday this.month];
             this.y = this.score;
             if bias
                 this.X = [ones(size(this.date)) this.X];
             end
             
+            % X and y IMPUTED
             y_NaN = [];
             i = 1;
             while i < length(this.date)
@@ -120,6 +122,7 @@ classdef forecastModel
                 i = i + dayLen;
             end
             this.y_Imp = fillHoles(y_NaN);
+            
         end
         
         function this = rawModelInput(this,mdl)
@@ -137,6 +140,7 @@ classdef forecastModel
         
         function this = setSplit(this,td)
             [m,n] = size(this.X);
+            [mi,~] = size(this.X_Imp);
             NB = 5-n;
             
             [idcs,~] = this.getDay(td);
@@ -145,9 +149,6 @@ classdef forecastModel
             
             this.tdimp = find(this.X_Imp(:,2-NB)==this.date(this.today), 1, 'last' );
             this.tmrimp = this.tdimp+1;
-            [mi,~] = size(this.X_Imp);
-            
-            this.tdd = 
             
             this.X_train = this.X(1:this.today,:);
             this.y_train = this.y(1:this.today);
@@ -348,11 +349,10 @@ classdef forecastModel
             end
         end
         
-        function this = kmeansDayClusters(this)
+        function this = kmeansDayClusters(this,K)
             m = length(this.y);
             this = this.createClusteringSet;
-            clList = kmeans(this.X_clust,16,'distance','sqeuclidean','Replicates',50);
-            K = max(clList);
+            clList = kmeans(this.X_clust,K,'distance','sqeuclidean','Replicates',50);
             meanFork = zeros([K,48]);
             for k = 1:K
                 kidcs = find(clList==k);
@@ -368,28 +368,37 @@ classdef forecastModel
             
         end
         
-        function yp = getRespForClusters(this)
+        function yp = getRespForClusters(this,listIn)
             L = length(this.dayClass);
             yp = [];
             for i = 1:L
-                yp = [yp this.dayClass_DEF(this.dayClass(i,:),:)];
+                yp = [yp this.dayClass_DEF(listIn(i,:),:)];
             end
             yp = this.desaturate(yp',1);
         end
         
         function this = createClSet(this)
+            this = this.kmeansDayClusters(16);
+            [md,~] = size(this.dayClass);
             this.y_cl = this.dayClass;
-            [~,n] = size(this.X)
+            [~,n] = size(this.X);
             NB = 5-n;
-            X_cl_ = [];
-            i = 1;
+            X_cl_ = zeros([length(this.dayClass),n-1]);
             for i = 1:48:length(this.y_Imp)+1-48
-                X_cl_ = [ X_cl_ ; this.X_Imp(i,2-NB) this.X_Imp(i,4-NB) this.X_Imp(i,5-NB) ];
+                X_cl_((i+47)/48,:) = [ this.X_Imp(i,2-NB) this.X_Imp(i,4-NB) this.X_Imp(i,5-NB) ];
             end
             this.X_cl = X_cl_;
+            
+            this.tdd = this.tdimp / length(this.y_Imp) * md;
+            this.tmrd = this.tdd + 1;
+            
+            this.X_cl_train = this.X_cl(1:this.tdd,:);
+            this.y_cl_train = this.y_cl(1:this.tdd);
+            this.X_cl_test = this.X_cl(this.tmrd:md,:);
+            this.y_cl_test = this.y_cl(this.tmrd:md);
         end
         
-        function plotfig = generateRegPlots(this,startday,nplots,varargin)
+        function [plotfig,avg_acc] = generateRegPlots(this,startday,nplots,varargin)
             
             figChoice = 'day';
             for i = 1:2:length(varargin)
@@ -404,7 +413,14 @@ classdef forecastModel
                 end
             end
             
-            figttl = this.ttl;
+            persistent fignum;
+            if isempty(fignum)
+                fignum = 0;
+            end
+            fignum = fignum + 1;
+            
+            figttl = [num2str(fignum) ': ' this.ttl];
+            accarr = zeros([1,nplots]);
             
             if isa(startday,'datetime')
                 startday = datenum(startday);
@@ -425,6 +441,7 @@ classdef forecastModel
                     
                     [dayIdcs,dayLen] = this.getDay(idcurr);
                     acc = 100 * sum(this.level(dayIdcs) == this.level_pred(dayIdcs)) / dayLen;
+                    accarr(i) = acc;
                     
                     subplot(ceil(sqrt(nplots)),ceil(sqrt(nplots)),i)
                     hold on
@@ -455,7 +472,7 @@ classdef forecastModel
                     ylabel('NEDOC Score')
                     if td
                         legend('Actual','Predictor','NEDOC Levels','Today')
-                    else
+                    elseif i == 1
                         legend('Actual','Predictor','NEDOC Levels')
                     end
                     axis([1, dayLen, 0, 200])
@@ -477,6 +494,7 @@ classdef forecastModel
                     
                     [weekIdcs,weekLen] = this.getWeek(idcurr);
                     acc = 100 * sum(this.level(weekIdcs) == this.level_pred(weekIdcs)) / weekLen;
+                    accarr(i) = acc;
                     
                     subplot(ceil(sqrt(nplots)),ceil(sqrt(nplots)),i)
                     hold on
@@ -519,7 +537,7 @@ classdef forecastModel
                 end
                 
             end
-            
+            avg_acc = mean(accarr);
         end
         
     end

@@ -11,7 +11,50 @@ if ~exist('T','var')
     T = readtable('PUH NEDOC.xlsx');
 %     cd Experiment
 end
-T_clean = loadCleanTable();
+% T_clean = loadCleanTable();
+
+%% ======================================================================== CONSTRUCT TABLES =============================
+
+m = forecastModel(T_clean,'temp',0);
+m = m.setSplit(length(m.y));
+m = m.createClSet;
+
+% imputed table
+[w,d,~] = num2dt(m.X_Imp(:,1) + m.X_Imp(:,2));
+
+Date_Time_DTA = d;
+Date_Time = m.X_Imp(:,1) + m.X_Imp(:,2);
+Date = m.X_Imp(:,1);
+Time = m.X_Imp(:,2);
+Month = m.X_Imp(:,4);
+WKD_Name = w;
+Weekday = m.X_Imp(:,3);
+Score = m.y_Imp;
+Level = getLevel(m.y_Imp);
+
+T_imputed = table(Date_Time_DTA, Date_Time, Date, Time, Month, WKD_Name, Weekday, Score, Level);
+
+% day table
+[w,d,~] = num2dt(m.X_cl(:,1));
+
+Date_Time_DTA = d;
+Date = m.X_cl(:,1);
+Month = m.X_cl(:,3);
+WKD_Name = w;
+Weekday = m.X_cl(:,2);
+Day_Class = m.y_cl;
+Average_Score = mean(m.dayClass_DEF(m.dayClass,:),2);
+Average_Level = getLevel(Average_Score);
+
+T_day = table(Date_Time_DTA, Date, Month, WKD_Name, Weekday, Day_Class, Average_Score, Average_Level);
+
+cldf = m.dayClass_DEF;
+
+clearvars -except T_clean T_imputed T_day cldf
+
+%% ========================================================================= LOAD DATA TO DATASTORE =======================
+
+data = Nedoc_Data(T_clean,T_imputed,T_day, cldf);
 
 %% ======================================================================== LOAD DATA ====================================
 
@@ -297,33 +340,57 @@ RFFT = RFFT.setSplit(today);
 RFFT = RFFT.selectModelFunctions(@fineTreeEns,@predictFcn);
 RFFT = RFFT.train();
 
-RFFT01 = forecastModel(T_clean,'Tree Ensemble Model 01',0);
-RFFT01 = RFFT01.setSplit(today);
-RFFT01 = RFFT01.selectModelFunctions(@fineTreeEns01,@predictFcn);
-RFFT01 = RFFT01.train();
+% RFFT = forecastModel(T_clean,'Tree Ensemble Model 01',0);
+% RFFT = RFFT.setSplit(today);
+% RFFT = RFFT.selectModelFunctions(@fineTreeEns01,@predictFcn);
+% RFFT = RFFT.train();
 
 %% tree ens predict and plot
 
 RFFT = RFFT.pred(0);
-rfftFig = RFFT.generateRegPlots(RFFT.tomorrow,9);
 
-RFFT01 = RFFT01.pred(0);
-rfft01Fig = RFFT01.generateRegPlots(RFFT01.tomorrow,9);
+[~,acc1] = RFFT.generateRegPlots(RFFT.tomorrow,9);
+[~,acc2] = RFFT.generateRegPlots(RFFT.tomorrow+48*9,9);
+fprintf('\n==============================\n')
+fprintf('Accuracy_1 = %.2f%%, Accuracy_2 = %.2f%%\n',acc1,acc2);
 
 %% clustering classifier init & train
 
-CCFM = forecastModel(T_clean,'Cluster Classifier Model',0);
+CCFM = forecastModel(T_clean,'Clustered Day Classifier Model',0);
 CCFM = CCFM.setSplit(today);
-CCFM = CCFM.kmeansDayClusters;
+CCFM = CCFM.createClSet;
 
-dec = CCFM.getRespForClusters;
-CCFM.score_pred = dec;
-CCFM.level_pred = getLevel(dec);
-CCFM.generateRegPlots(CCFM.tomorrow+100,9);
+% dec = CCFM.getRespForClusters;
+% CCFM.score_pred = dec;
+% CCFM.level_pred = getLevel(dec);
+% CCFM.generateRegPlots(CCFM.tomorrow,9);
 
 %% clustering classifier pred & plot.
 
+% boosted tree ens classifier
+% mdl_BSTC = BoostedTreeEns_CLS(X_train,y_train);
+% yp = mdl_BSTC.predictFcn(CCFM.X_cl);
 
+% 50 x 100 x 50 NN classifier
+% mdl = ThreeLayerNN_CLS(X_train,y_train);
+% yp = mdl.predictFcn(CCFM.X_cl);
+
+% naive-bayes optimized classifier (only 20 iters)
+mdl = mdl_NBOC;
+
+% fine tree
+% mdl = mdl_FTRC;
+
+yp = mdl.predictFcn(CCFM.X_cl);
+clsacc = sum(yp==CCFM.y_cl)/length(yp);
+yp_REG = CCFM.getRespForClusters(yp);
+CCFM.score_pred = yp_REG;
+CCFM.level_pred = getLevel(yp_REG);
+[plotfig1,acc1] = CCFM.generateRegPlots(CCFM.tomorrow,9);
+[plotfig2,acc2] = CCFM.generateRegPlots(CCFM.tomorrow+48*9,9);
+fprintf('\n==============================\n')
+fprintf('Day Class Accuracy = %.2f%%\n',clsacc*100);
+fprintf('Accuracy_1 = %.2f%%, Accuracy_2 = %.2f%%\n',acc1,acc2);
 
 %% HAC
 

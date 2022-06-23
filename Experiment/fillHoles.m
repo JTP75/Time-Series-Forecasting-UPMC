@@ -38,8 +38,8 @@ while i <= M
     i=i+1;
 end
 
-fprintf('\n================================\nConsecutive NaN Max: %d at %d\n================================\n',...
-    consecutive_NaN_max, iMax)
+% fprintf('\n================================\nConsecutive NaN Max: %d at %d\n================================\n',...
+%     consecutive_NaN_max, iMax)
 
 newData = oldData;
 end
