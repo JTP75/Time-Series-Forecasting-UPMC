@@ -25,7 +25,11 @@ end
 
 newTable = table(dateArr, dateNum+timeNum, dateNum, timeNum, month, weekday_name, weekday_num, score, levelNum, 'VariableNames',...
                 {'Date_Time_DTA','Date_Time','Date','Time','Month','WKD_Name','Weekday','Score','Level'});
-
+            
+            
+newTable(29537,:) = [];         % <---- REPEATED POINTS!!!
+newTable(29539,:) = [];
+newTable(16729,:) = [];
 
 
 

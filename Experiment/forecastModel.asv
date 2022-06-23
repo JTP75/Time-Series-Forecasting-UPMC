@@ -137,17 +137,16 @@ classdef forecastModel
         
         function this = setSplit(this,td)
             [m,n] = size(this.X);
-            NB = 5-n;
-            
             [idcs,~] = this.getDay(td);
+            
             this.today = max(idcs);
             this.tomorrow = this.today+1;
             
-            this.tdimp = find(this.X_Imp(:,2-NB)==this.date(this.today), 1, 'last' );
+            NB = 5-n;
+            
+            this.tdimp = find(this.X_Imp(:,2-NB)==this.date(this.today), 1, 'last' ); % FIX ME IF BIAS GONE
             this.tmrimp = this.tdimp+1;
             [mi,~] = size(this.X_Imp);
-            
-            this.tdd = 
             
             this.X_train = this.X(1:this.today,:);
             this.y_train = this.y(1:this.today);
@@ -383,10 +382,9 @@ classdef forecastModel
             NB = 5-n;
             X_cl_ = [];
             i = 1;
-            for i = 1:48:length(this.y_Imp)+1-48
+            for i = 1:48:length(this.y_Imp)+1
                 X_cl_ = [ X_cl_ ; this.X_Imp(i,2-NB) this.X_Imp(i,4-NB) this.X_Imp(i,5-NB) ];
             end
-            this.X_cl = X_cl_;
         end
         
         function plotfig = generateRegPlots(this,startday,nplots,varargin)

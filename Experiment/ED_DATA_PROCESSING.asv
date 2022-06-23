@@ -314,16 +314,20 @@ rfft01Fig = RFFT01.generateRegPlots(RFFT01.tomorrow,9);
 
 CCFM = forecastModel(T_clean,'Cluster Classifier Model',0);
 CCFM = CCFM.setSplit(today);
+CCFM = CCFM.createClusteringSet;
 CCFM = CCFM.kmeansDayClusters;
-
-dec = CCFM.getRespForClusters;
-CCFM.score_pred = dec;
-CCFM.level_pred = getLevel(dec);
-CCFM.generateRegPlots(CCFM.tomorrow+100,9);
 
 %% clustering classifier pred & plot.
 
+ypdeord = CCFM.predForClustiffier;
 
+% X_Imp = CCFM.X_Imp;
+% lst = [];
+% for i = 1:length(X_Imp)-1
+%     if X_Imp(i+1,1) > X_Imp(i,1) + 1
+%         lst = [lst i];
+%     end
+% end
 
 %% HAC
 
