@@ -54,7 +54,7 @@ clearvars -except T_clean T_imputed T_day cldf
 
 %% ========================================================================= LOAD DATA TO DATASTORE =======================
 
-data = Nedoc_Data(T_clean,T_imputed,T_day, cldf);
+data = Nedoc_Data(T_clean, T_imputed, T_day, cldf);
 
 %% ======================================================================== LOAD DATA ====================================
 
