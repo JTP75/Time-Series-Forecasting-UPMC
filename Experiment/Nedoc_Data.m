@@ -7,7 +7,8 @@ classdef Nedoc_Data
         T_day                               % day table:        assigns a kmeans/HAC class to each day
         
         % input matrix struct
-        X                                   % X struct
+        X                                   % X struct (contains serial date and time, weekday, and month)
+        X_t                                 % X_t struct (contains only serial date-time or serial date)
         
         % target & response vector structs
         y                                   % target struct
@@ -36,6 +37,10 @@ classdef Nedoc_Data
             X_imp = [ (o.T_imp.Date) (o.T_imp.Time) (o.T_imp.Weekday) (o.T_imp.Month) ];
             X_day = [ (o.T_day.Date) (o.T_day.Weekday) (o.T_day.Month) ];
             o.X = struct('c',X_cln, 'i',X_imp, 'd',X_day);
+            
+            o.X_t = struct('c',(o.T_cln.Date)+(o.T_cln.Time),...
+                           'i',(o.T_imp.Date)+(o.T_imp.Time),...
+                           'd',(o.T_day.Date));
             
             y_cln = (o.T_cln.Score);
             y_imp = (o.T_imp.Score);
@@ -74,7 +79,7 @@ classdef Nedoc_Data
             idxList = sort(idxList) + lowerBound - 1;
             [dSz,~] = size(idxList);
         end
-        function [X,y] = getmats(o,setspec,field)
+        function [X,y] = getmats(o,setspec,field,fullORtime)
             if strcmp(setspec,'train')
                 idcs_c = 1:o.today.c;
                 idcs_i = 1:o.today.i;
@@ -91,18 +96,34 @@ classdef Nedoc_Data
                 fprintf('\nIn Nedoc_Data.getmats:\nInvalid set specifier. Use ''train'', ''test'', or ''all''.\n')
             end
             
-            
-            if strcmp(field,'cln')
-                X = o.X.c(idcs_c,:);
-                y = o.y.c(idcs_c);
-            elseif strcmp(field,'imp')
-                X = o.X.i(idcs_i,:);
-                y = o.y.i(idcs_i);
-            elseif strcmp(field,'day')
-                X = o.X.d(idcs_d,:);
-                y = o.y.d(idcs_d);
+            if strcmp(fullORtime,'full')
+                if strcmp(field,'cln')
+                    X = o.X.c(idcs_c,:);
+                    y = o.y.c(idcs_c);
+                elseif strcmp(field,'imp')
+                    X = o.X.i(idcs_i,:);
+                    y = o.y.i(idcs_i);
+                elseif strcmp(field,'day')
+                    X = o.X.d(idcs_d,:);
+                    y = o.y.d(idcs_d);
+                else
+                    fprintf('\nIn Nedoc_Data.getmats:\nInvalid Field. Use ''cln'', ''imp'', or ''day''.\n')
+                end
+            elseif strcmp(fullORtime,'time')
+                if strcmp(field,'cln')
+                    X = o.X_t.c(idcs_c,:);
+                    y = o.y.c(idcs_c);
+                elseif strcmp(field,'imp')
+                    X = o.X_t.i(idcs_i,:);
+                    y = o.y.i(idcs_i);
+                elseif strcmp(field,'day')
+                    X = o.X_t.d(idcs_d,:);
+                    y = o.y.d(idcs_d);
+                else
+                    fprintf('\nIn Nedoc_Data.getmats:\nInvalid Field. Use ''cln'', ''imp'', or ''day''.\n')
+                end
             else
-                fprintf('\nIn Nedoc_Data.getmats:\nInvalid Field. Use ''cln'', ''imp'', or ''day''.\n')
+                fprintf('\nIn Nedoc_Data.getmats:\nInvalid full/time specifier. Use ''full'' or ''time''.\n')
             end
         end
         
@@ -124,7 +145,7 @@ classdef Nedoc_Data
                 fprintf('Invalid typestr. use ''cln'', ''imp'', or ''day''.')
             end
         end
-        function o = setToday(o,tdin)                             % td is a serial date or date string 'mm/dd/yyyy'
+        function o = setToday(o,tdin)   % td is a serial date or date string 'mm/dd/yyyy'
             if isa(tdin,'char')
                 td = datenum(tdin,'mm/dd/yyyy');
             elseif 0 <= tdin && tdin <= 1
@@ -228,10 +249,11 @@ classdef Nedoc_Data
         function [plotfig,avg_acc] = plot(o, ttl, startIn, nplots, varargin)
             % arg processing
             if isa(startIn,'char')
-                if strcmp(startIn,'today')
+                if strcmp(startIn,'tmr')    % natural place to start: day after training set ends
                     start = o.today.dt;
                 else
                     start = datenum(startIn,'mm/dd/yyyy');
+                    start = start - 1;
                 end
             else
                 start = startIn;
