@@ -1,7 +1,7 @@
-function [net,mu,sig,XrAll] = trainCRNet(data_store,lags)
+function [net,mu,sig,XrAll] = trainCRNet(data_store,lag_interval)
 
 %% OPTIONS ================================================================
-Lag = 1:lags;               % How many obs to look back
+Lag = lag_interval;         % How many obs to look back
 % horizon = 50;               % horizon forecasting to be use in the beyong horizon section
 MiniBatchSize = 64;         % MiniBatchSize
 MaxEpochs = 1;              % MaxEpochs
@@ -105,8 +105,8 @@ options = trainingOptions...
     'MiniBatchSize',        MiniBatchSize,...
     'Verbose',              false, ...
     'Shuffle',              "every-epoch",...
-    'ExecutionEnvironment', mydevice);
-%     'Plots',                'training-progress');
+    'ExecutionEnvironment', mydevice,...
+    'Plots',                'training-progress');
 
 %% TRAIN NETWORK (MAY TAKE A WHILE...) ====================================
 % rng(0);

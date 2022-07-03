@@ -4,15 +4,12 @@ clc
 clearvars
 close all
 
-%% ======================================================================== CONSTRUCT TABLES =============================
+%% ======================================================================== CONSTRUCT TABLES & DATA STORE ================
 
-[clean_table, imputed_table, day_table, SCDF_matrix] = construct_tables;
-data_store = Nedoc_Data(clean_table, imputed_table, day_table, SCDF_matrix);
+[table_cleaned, table_imputed, table_days, SCDF_matrix] = construct_tables;
+data_store = Nedoc_Data(table_cleaned, table_imputed, table_days, SCDF_matrix);
 clear SCDF_matrix
-
-%% ========================================================================= LOAD DATA TO DATASTORE =======================
-
-data = Nedoc_Data(T_clean, T_imputed, T_day, cldf);
+disp('.')
 
 %% O======================================================================================================================O
 %  |----------------------------------------------------------------------------------------------------------------------|
@@ -20,6 +17,8 @@ data = Nedoc_Data(T_clean, T_imputed, T_day, cldf);
 %  |----------------------------------------------------------------------------------------------------------------------|
 %% O======================================================================================================================O
 
+data_store = data_store.setToday(0.90);
+disp(['Today: ' data_store.today.dts])
 
 %% ======================================================================== TRIG REGERESSION =============================
 % inspired by fourier series: large sum of sines and cosines
@@ -66,27 +65,179 @@ for i = 1:days
 end
 
 %% ======================================================================== **RNN** ======================================
-%% reg
-lags = 6;
-[crnet, mu, sig, Xr] = trainCRNet(data_store,lags);   % Xr is standardized lag matrix
-y_prediction = predict( crnet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",lags );
-y_prediction = sig .* y_prediction + mu;
-y_prediction = [ones([lags,1]) ; y_prediction];
-y_prediction = cast(y_prediction,"double");
-%% optimize lags
-% for lags = 1:100
-%     for
-%         
-%     end
-% end
 
-%% cls
-lags = 31;
-[crnet, Xr] = trainCRNet_CLS(data_store,lags);   % Xr is standardized lag matrix
-y_prediction = predict( crnet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",lags );
-y_prediction = classifyProbs(y_prediction);
-y_prediction = [ones([lags,1]) ; y_prediction];
+M = data_store.L.i;
+
+%% reg
+lag = 1:24;
+[crnet, mu, sig, Xr] = trainCRNet(data_store,lag);   % Xr is standardized lag matrix
+y_prediction = predict( crnet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",lag(end) );
+y_prediction = sig .* y_prediction + mu;
+y_prediction = [ones([(M - length(y_prediction)),1]) ; y_prediction];
 y_prediction = cast(y_prediction,"double");
+
+%% optimize lags
+i_tr = 1:data_store.today.i;
+i_ts = (data_store.today.i + 1):data_store.L.i;
+yl = getLevel(y);
+for lags = 5:100
+    for i = 1:5
+        [crnet, mu, sig, Xr] = trainCRNet(data_store,lags);   % Xr is standardized lag matrix
+        y_prediction = predict( crnet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",lags );
+        y_prediction = sig .* y_prediction + mu;
+        y_prediction = [ones([lags,1]) ; y_prediction]; %#ok<AGROW>
+        y_prediction = cast(y_prediction,"double");
+        
+        ypl = getLevel(y_prediction);
+        
+        MSEs(lags-4,i) = struct(...
+            'train',loss_mse(y(i_tr), y_prediction(i_tr)),...
+            'test',loss_mse(y(i_ts), y_prediction(i_ts)),...
+            'all',loss_mse(y, y_prediction)      )      %#ok<NOPTS,SAGROW>
+        
+        ACCs(lags-4,i) = struct(...
+            'train',sum(yl(i_tr)==ypl(i_tr))/length(i_tr),...
+            'test',sum(yl(i_ts)==ypl(i_ts))/length(i_ts),...
+            'all',sum(yl==ypl)/length(y)      ) %#ok<NOPTS,SAGROW>
+    end
+end
+
+%% processing optimized lags
+for i = 1:size(ACCs,1)
+    [vt1, vt2, vt3, vt4, vt5] = ACCs(i,:).train;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    ACC_tr(i,1) = mean(vt,'all');
+    [vt1, vt2, vt3, vt4, vt5] = ACCs(i,:).test;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    ACC_ts(i,1) = mean(vt,'all');
+    [vt1, vt2, vt3, vt4, vt5] = ACCs(i,:).all;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    ACC_al(i,1) = mean(vt,'all');
+    
+    [vt1, vt2, vt3, vt4, vt5] = MSEs(i,:).train;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    MSE_tr(i,1) = mean(vt,'all');
+    [vt1, vt2, vt3, vt4, vt5] = MSEs(i,:).test;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    MSE_ts(i,1) = mean(vt,'all');
+    [vt1, vt2, vt3, vt4, vt5] = MSEs(i,:).all;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    MSE_al(i,1) = mean(vt,'all');
+end
+
+%% plot lag opts
+fACC = figure('NumberTitle','off','Name','Accuracies');
+subplot(3,1,1)
+plot(ACC_tr)
+title('Training Set')
+axis([1,96,0,1])
+subplot(3,1,2)
+plot(ACC_ts)
+title('Testing Set')
+axis([1,96,0,1])
+subplot(3,1,3)
+plot(ACC_al)
+title('Full Set')
+axis([1,96,0,1])
+
+fMSE = figure('NumberTitle','off','Name','Mean Squared Errors');
+subplot(3,1,1)
+plot(MSE_tr)
+title('Training Set')
+axis([1,96,0,1500])
+subplot(3,1,2)
+plot(MSE_ts)
+title('Testing Set')
+axis([1,96,0,1500])
+subplot(3,1,3)
+plot(MSE_al)
+title('Full Set')
+axis([1,96,0,1500])
+
+%% **DAY CURVE PREDICTING**
+M = 736;
+lags = 1:28;
+
+% data set
+[~,yimp] = data_store.getmats('all','imp','time');
+
+x = (1:48)';
+y = zeros([data_store.L.d,48]);
+for i = 1:48:length(yimp)-47
+    y((i+47)/48,:) = yimp(i:i+47);
+end
+
+X = [   x.^0,...
+    sin(x*2*pi/48), cos(x*2*pi/48),...
+    sin(x*2*pi/24), cos(x*2*pi/24),...
+    sin(x*2*pi/12), cos(x*2*pi/12),...
+    sin(x*2*pi/6),  cos(x*2*pi/6)     ];
+
+coeffs = zeros([size(y,1),size(X,2)]);
+for i = 1:size(y,1)
+    coeffs(i,:) = normalEqn(X,y(i,:)');
+end
+
+[crnet, mu, sig, Xcell] = trainCRNet_DC(data_store,lags,coeffs);   % Xr is standardized lag matrix
+coeff_pred_std = predict( crnet, Xcell, "ExecutionEnvironment",'gpu', "MiniBatchSize", max(lags)*9 );
+coeff_pred_std = cast(coeff_pred_std,"double");
+coeff_pred_std = [zeros([M-size(coeff_pred_std,1) , size(coeff_pred_std,2)]) ; coeff_pred_std];
+coeff_pred = sig .* coeff_pred_std + mu;
+
+daypred = coeff_pred * X';
+y_prediction = reshape(daypred', [], 1);
+
+%% ======================================================================== DAY-CURVE TRANSFORMATIONS ====================
+% trying to find a a day-curve function/transformation
+
+% data set 
+[~,yimp] = data_store.getmats('all','imp','time');
+
+x = (1:48)';
+y = zeros([data_store.L.d,48]);
+for i = 1:48:length(yimp)-47
+    y((i+47)/48,:) = yimp(i:i+47);
+end
+
+% fits
+
+X = [x.^0,...
+    sin(x*2*pi/48), cos(x*2*pi/48),...
+    sin(x*2*pi/24), cos(x*2*pi/24),...
+    sin(x*2*pi/12), cos(x*2*pi/12),...
+    sin(x*2*pi/6),  cos(x*2*pi/6), ...
+    sin(x*2*pi),    cos(x*2*pi)     ];
+coeffs = zeros([size(y,1),size(X,2)]);
+yp = zeros(size(y));
+err = zeros([size(y,1),1]);
+
+for i = 1:size(y,1)
+    coeffs(i,:) = normalEqn(X,y(i,:)');
+    yp(i,:) = X * coeffs(i,:)';
+    err(i) = loss_mse(y(i,:),yp(i,:));
+end
+
+k = 10;
+[~,worst_idcs] = maxk(err,k);
+
+for i = 1:k
+    ind = worst_idcs(i);
+%     ind = i;
+    f = figure(1);
+    hold on
+    plot( y(ind,:))
+    plot(yp(ind,:))
+    axis([1,48,0,200])
+    ttl = ['date: ' datestr(table_days.Date_Time_DTA(ind,:))];
+    title(ttl)
+    hold off
+    sel = menu('View Next Day','Next','Stop');
+    if sel == 2
+        close 1
+        break;
+    end
+    close 1
+end
 
 %% ======================================================================== **ARIMA** ====================================
 
@@ -239,8 +390,8 @@ for i = 1:575
     y_day(:,i) = X(i,:)';
     X_cos = [ones([48,1]),cos(pi/24 * X_day),cos(pi/24 * X_day + 5),cos(pi/24 * X_day + 10),cos(pi/24 * X_day + 20)];
     
-    theta(:,i) = pinv(X_cos'*X_cos)*(X_cos'*y_day(:,i));
-    ypred(:,i) = X_cos * theta(:,i);
+    coeffs(:,i) = pinv(X_cos'*X_cos)*(X_cos'*y_day(:,i));
+    ypred(:,i) = X_cos * coeffs(:,i);
     
     err(i) = sum((ypred(:,i)-y_day(:,i)).^2)/48;
 end
@@ -340,13 +491,5 @@ g1 = gpuArray(in1); % Input gpuArray.
 g2 = gpuArray(in2); % Input gpuArray.
 
 result = feval(k,g1,g2);
-
-
-
-
-
-
-
-
 
 

@@ -318,9 +318,6 @@ classdef Nedoc_Data
                     acc = 100 * sum(getLevel(o.y.c(dayIdcs)) == getLevel(o.yp.c(dayIdcs))) / dayLen;
                     plot(o.y.c(dayIdcs), 'b-')
                     plot(o.yp.c(dayIdcs), 'r--')
-                    if sum(ismember(o.today.c,dayIdcs)) ~= 0
-                        xline(o.today.c - dayIdcs(1), 'k-', 'LineWidth', 4);
-                    end
                     plttl = [o.T_cln.WKD_Name(idcurr,:) ', '...
                         datestr(o.T_cln.Date_Time_DTA(idcurr)) ': Acc = ' num2str(acc) '%'];
                 elseif strcmp(fld,'imp')
@@ -329,8 +326,8 @@ classdef Nedoc_Data
                     acc = 100 * sum(getLevel(o.y.i(dayIdcs)) == getLevel(o.yp.i(dayIdcs))) / dayLen;
                     plot(o.y.i(dayIdcs), 'b-')
                     plot(o.yp.i(dayIdcs), 'r--')
-                    if sum(ismember(o.today.i,dayIdcs)) ~= 0
-                        xline(o.today.i, 'k-', 'LineWidth', 4);
+                    if sum(ismember(o.today.i,dayIdcs))
+                        xline(o.today.i)
                     end
                     plttl = [o.T_imp.WKD_Name(idcurr,:) ', '...
                         datestr(o.T_imp.Date_Time_DTA(idcurr)) ': Acc = ' num2str(acc) '%'];

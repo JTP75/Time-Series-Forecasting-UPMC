@@ -1,232 +1,24 @@
 %% ======================================================================== CLEAR & CLOSE ================================
 
 clc
-clearvars -except T TC
+clearvars
 close all
 
-%% ======================================================================== READ TABLE ===================================
+%% ======================================================================== CONSTRUCT TABLES & DATA STORE ================
 
-if ~exist('T','var')
-%     cd ..
-    T = readtable('PUH NEDOC.xlsx');
-%     cd Experiment
-end
-% T_clean = loadCleanTable();
+[table_cleaned, table_imputed, table_days, SCDF_matrix] = construct_tables;
+data_store = Nedoc_Data(table_cleaned, table_imputed, table_days, SCDF_matrix);
+clear SCDF_matrix
+disp('.')
 
-%% ======================================================================== CONSTRUCT TABLES =============================
+%% O======================================================================================================================O
+%  |----------------------------------------------------------------------------------------------------------------------|
+%% |======================================================================= REGRESSORS ===================================|
+%  |----------------------------------------------------------------------------------------------------------------------|
+%% O======================================================================================================================O
 
-m = forecastModel(T_clean,'temp',0);
-m = m.setSplit(length(m.y));
-m = m.createClSet;
-
-% imputed table
-[w,d,~] = num2dt(m.X_Imp(:,1) + m.X_Imp(:,2));
-
-Date_Time_DTA = d;
-Date_Time = m.X_Imp(:,1) + m.X_Imp(:,2);
-Date = m.X_Imp(:,1);
-Time = m.X_Imp(:,2);
-Month = m.X_Imp(:,4);
-WKD_Name = w;
-Weekday = m.X_Imp(:,3);
-Score = m.y_Imp;
-Level = getLevel(m.y_Imp);
-
-T_imputed = table(Date_Time_DTA, Date_Time, Date, Time, Month, WKD_Name, Weekday, Score, Level);
-
-% day table
-[w,d,~] = num2dt(m.X_cl(:,1));
-
-Date_Time_DTA = d;
-Date = m.X_cl(:,1);
-Month = m.X_cl(:,3);
-WKD_Name = w;
-Weekday = m.X_cl(:,2);
-Day_Class = m.y_cl;
-Average_Score = mean(m.dayClass_DEF(m.dayClass,:),2);
-Average_Level = getLevel(Average_Score);
-
-T_day = table(Date_Time_DTA, Date, Month, WKD_Name, Weekday, Day_Class, Average_Score, Average_Level);
-
-cldf = m.dayClass_DEF;
-
-clearvars -except T_clean T_imputed T_day cldf
-
-%% ========================================================================= LOAD DATA TO DATASTORE =======================
-
-data = Nedoc_Data(T_clean, T_imputed, T_day, cldf);
-
-%% ======================================================================== LOAD DATA ====================================
-
-score = T.MODIFIED_SCORE_VAL;                                               % score array (y)
-dateArr = T.Date;                                                           % date as a datetime array
-dateNum = datenum(T.Date);                                                  % date as a numeric array
-timeNum = T.Time;                                                           % time as a numeric array
-month = T.Month;                                                            % month of year
-
-levelStr = {};
-levelStr = T.NEDOC_LEVEL;                                                   % nedoc level as string
-
-[mSmpls, ~] = size(score);                                                       % nsamples
-
-for i = 1:mSmpls
-    levelNum(i,1) = str2num(levelStr{i}(7));
-end
-
-biasFeature = ones([mSmpls, 1]);
-
-%% ======================================================================== FEATURE ENGINEERING ==========================
-
-% value 1-7 indicating which day of the week it is
-% monday 1, tuesday 2, wednesday 3, thursday 4, friday 5, saturday 6, sunday 7
-% January 1st, 2020 was a wednesday
-
-[weekday_num, weekday_name] = weekday(dateArr);
-T(:,23) = array2table(weekday_num);
-
-%% ======================================================================== IMPUTATION ===================================
-
-
-
-% M = 48;             % desired num of smpls per day
-% timeImp = [];
-% wkdNumImp = [];
-% wkdNameImp = [];
-% monthImp = [];
-% dtNumImp = [];
-% dtDtmImp = [];
-% scoreImp = [];
-% 
-% dayTmImp = ((1:M)' - 1)/M;
-% 
-% MTdayArr = zeros([M,1]);
-% MTstrArr = strings([M,3]);
-% MTdtmArr = NaT([M,1]);
-% 
-% i = 1;
-% while i <= mSmpls
-%     [dayInt,wkd,dayLen] = extractDay(weekday_num,i);
-%     dayScore = imputeScores(timeNum,score,dayInt,dayLen);
-%     dayMonth = month(i);
-%     dayDtNum = dateNum(i);
-%     for o = 1:M
-%         dayDtDtm(o,1) = dateArr(i);
-%     end
-%         
-%     timeImp = [ timeImp ; dayTmImp ];
-%     wkdNumImp = [ wkdNumImp ; MTdayArr+wkd ];
-%     wkdNameImp = [ wkdNameImp ; MTstrArr+getWeekday(wkd) ];
-%     monthImp = [ monthImp ; MTdayArr+dayMonth ];
-%     dtNumImp = [ dtNumImp ; MTdayArr+dayDtNum ];
-%     dtDtmImp = [ dtDtmImp ; dayDtDtm ];
-%     scoreImp = [ scoreImp ; dayScore ];
-%     
-%     i=i+dayLen;
-% end
-% [mImp,~] = size(scoreImp);
-% bfImp = ones([mImp,1]);
-% 
-% %% ======================================================================== FILL MATRICES AND SPLIT DATA =================
-% 
-% X = [biasFeature dateNum timeNum weekday_num month];
-% XImp = [bfImp dtNumImp timeImp wkdNumImp monthImp];
-% % X = [dateNum timeNum weekday_num month];
-% yreg = score;
-% ycls = getLevel(score);
-% 
-% t = dtNumImp + timeImp;
-% 
-% yregImp = scoreImp;
-% yclsImp = getLevel(scoreImp);
-% 
-% addend = 1000;
-% today = round(3*mSmpls/4 + addend);
-% tdImp = find(dtNumImp==dateNum(today), 1);
-% % data points before today are training, after are testing
-% 
-% %% ======================================================================== NEW DATASTORE FOR DLTBOX =====================
-% 
-% dsTable = table(t,scoreImp);
-% writetable(dsTable,'ImputedTSData.xlsx');
-% ds = datastore('ImputedTSData.xlsx');
-
-%% ======================================================================== REGRESSORS ===================================
-
-
-%% RANDOM FOREST OF FINE REGRESSION TREES
-idcurr = today;
-days = 9;
-
-fineTreeEnsModel = fineTreeEns(X(1:today,:), yreg(1:today));
-[dayIdcs,~,dayLen] = extractDay(weekday_num,idcurr);
-idcurr = dayIdcs(dayLen) + 1;
-
-figure(1)
-for i = 1:days
-    
-    [dayIdcs,~,dayLen] = extractDay(weekday_num,idcurr);
-    
-    Xq = X(dayIdcs,:);
-    yregq = yreg(dayIdcs);
-    yclsq = ycls(dayIdcs);
-    
-    yp_FTE = fineTreeEnsModel.predictFcn(Xq);                               % predicted score
-    ypCl_FTE = getLevel(yp_FTE);                                            % predicted level
-    
-    accFTE(i) = sum(ypCl_FTE == yclsq) / dayLen * 100;
-    fprintf(['Day: ' weekday_name(idcurr,:) '\taccFTE = %.2f%%\n'],accFTE(i))
-    
-    subplot(ceil(sqrt(days)),ceil(sqrt(days)),i)
-    plot(yregq)
-    hold on
-    plot(yp_FTE, 'r--')
-    ttl = ...
-        [weekday_name(idcurr,:) ', ' datestr(dateArr(idcurr)) ': Acc = '...
-        num2str(accFTE(i)) '%' ', dayLen = ' num2str(dayLen)];
-    title(ttl)
-    legend('Actual','Fine Tree Ensemble')
-    axis([1, dayLen, 0, 200])
-    hold off
-    
-    idcurr = dayIdcs(dayLen) + 1;
-    clear Xq yregq yclsq 
-    
-end
-
-%% RANDOM FOREST OF FINE REGRESSION TREES (IMPUTED)
-idcurr = tdImp;
-days = 9;
-
-fineTreeEnsModelImp = fineTreeEns(XImp(1:tdImp,:), yregImp(1:tdImp));
-figure(2)
-for i = 1:days
-    
-    [dayIdcs,~,dayLen] = extractDay(wkdNumImp,idcurr);
-    
-    Xq = XImp(dayIdcs,:);
-    yregq = yregImp(dayIdcs);
-    yclsq = yclsImp(dayIdcs);
-    
-    yp_FTE = fineTreeEnsModelImp.predictFcn(Xq);                            % predicted score
-    ypCl_FTE = getLevel(yp_FTE);                                            % predicted level
-    
-    accFTE(i) = sum(ypCl_FTE == yclsq) / dayLen * 100;
-    fprintf(strcat('Day: ', wkdNameImp(idcurr), '\taccFTE = ', num2str(accFTE(i)), '%%\n'))
-    
-    subplot(ceil(sqrt(days)),ceil(sqrt(days)),i)
-    plot(yregq)
-    hold on
-    plot(yp_FTE, 'r--')
-    ttl = strcat(wkdNameImp(idcurr), ', ', datestr(dtDtmImp(idcurr)), ': Acc = ', num2str(accFTE(i)), '%');
-    title(ttl)
-    legend('Actual','Fine Tree Ensemble Imputed')
-    axis([1, dayLen, 0, 200])
-    hold off
-    
-    idcurr = dayIdcs(dayLen) + 1;
-    clear Xq yregq yclsq 
-    
-end
+data_store = data_store.setToday(0.75);
+disp(['Today: ' data_store.today.dts])
 
 %% ======================================================================== TRIG REGERESSION =============================
 % inspired by fourier series: large sum of sines and cosines
@@ -273,20 +65,172 @@ for i = 1:days
 end
 
 %% ======================================================================== **RNN** ======================================
+
+M = data_store.L.i;
+
 %% reg
-[crnet, mu, sig, Xr] = trainCRNet(data_store);   % Xr is standardized lag matrix
-y_prediction = predict( crnet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",48 );
+lag = 1:24;
+[crnet, mu, sig, Xr] = trainCRNet(data_store,lag);   % Xr is standardized lag matrix
+y_prediction = predict( crnet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",lag(end) );
 y_prediction = sig .* y_prediction + mu;
-y_prediction = [(1:48)' ; y_prediction];
+y_prediction = [ones([(M - length(y_prediction)),1]) ; y_prediction];
 y_prediction = cast(y_prediction,"double");
 
+%% optimize lags
+i_tr = 1:data_store.today.i;
+i_ts = (data_store.today.i + 1):data_store.L.i;
+yl = getLevel(y);
+for lags = 5:100
+    for i = 1:5
+        [crnet, mu, sig, Xr] = trainCRNet(data_store,lags);   % Xr is standardized lag matrix
+        y_prediction = predict( crnet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",lags );
+        y_prediction = sig .* y_prediction + mu;
+        y_prediction = [ones([lags,1]) ; y_prediction]; %#ok<AGROW>
+        y_prediction = cast(y_prediction,"double");
+        
+        ypl = getLevel(y_prediction);
+        
+        MSEs(lags-4,i) = struct(...
+            'train',loss_mse(y(i_tr), y_prediction(i_tr)),...
+            'test',loss_mse(y(i_ts), y_prediction(i_ts)),...
+            'all',loss_mse(y, y_prediction)      )      %#ok<NOPTS,SAGROW>
+        
+        ACCs(lags-4,i) = struct(...
+            'train',sum(yl(i_tr)==ypl(i_tr))/length(i_tr),...
+            'test',sum(yl(i_ts)==ypl(i_ts))/length(i_ts),...
+            'all',sum(yl==ypl)/length(y)      ) %#ok<NOPTS,SAGROW>
+    end
+end
+
+%% processing optimized lags
+for i = 1:size(ACCs,1)
+    [vt1, vt2, vt3, vt4, vt5] = ACCs(i,:).train;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    ACC_tr(i,1) = mean(vt,'all');
+    [vt1, vt2, vt3, vt4, vt5] = ACCs(i,:).test;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    ACC_ts(i,1) = mean(vt,'all');
+    [vt1, vt2, vt3, vt4, vt5] = ACCs(i,:).all;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    ACC_al(i,1) = mean(vt,'all');
+    
+    [vt1, vt2, vt3, vt4, vt5] = MSEs(i,:).train;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    MSE_tr(i,1) = mean(vt,'all');
+    [vt1, vt2, vt3, vt4, vt5] = MSEs(i,:).test;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    MSE_ts(i,1) = mean(vt,'all');
+    [vt1, vt2, vt3, vt4, vt5] = MSEs(i,:).all;
+    vt = [vt1 vt2 vt3 vt4 vt5];
+    MSE_al(i,1) = mean(vt,'all');
+end
+
+%% plot lag opts
+fACC = figure('NumberTitle','off','Name','Accuracies');
+subplot(3,1,1)
+plot(ACC_tr)
+title('Training Set')
+axis([1,96,0,1])
+subplot(3,1,2)
+plot(ACC_ts)
+title('Testing Set')
+axis([1,96,0,1])
+subplot(3,1,3)
+plot(ACC_al)
+title('Full Set')
+axis([1,96,0,1])
+
+fMSE = figure('NumberTitle','off','Name','Mean Squared Errors');
+subplot(3,1,1)
+plot(MSE_tr)
+title('Training Set')
+axis([1,96,0,1500])
+subplot(3,1,2)
+plot(MSE_ts)
+title('Testing Set')
+axis([1,96,0,1500])
+subplot(3,1,3)
+plot(MSE_al)
+title('Full Set')
+axis([1,96,0,1500])
+
 %% cls
-[crnet, Xr] = trainCRNet_CLS(data_store);   % Xr is standardized lag matrix
-%%
-y_prediction = predict( crnet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",10 );
-y_prediction = classifyProbs(y_prediction);
-y_prediction = [(1:10)' ; y_prediction];
-y_prediction = cast(y_prediction,"double");
+M = 736;
+lags = 1:10;
+
+X = [   x.^0,...
+    sin(x*2*pi/48), cos(x*2*pi/48),...
+    sin(x*2*pi/24), cos(x*2*pi/24),...
+    sin(x*2*pi/12), cos(x*2*pi/12)  ];%,...
+%     sin(x*2*pi/6),  cos(x*2*pi/6)     ];
+
+% [crnet, mu, sig, Xcell] = trainCRNet_DC(data_store,lags,coeffs);   % Xr is standardized lag matrix
+coeff_pred_std = predict( crnet, Xcell, "ExecutionEnvironment",'gpu', "MiniBatchSize", max(lags)*11 );
+coeff_pred_std = cast(coeff_pred_std,"double");
+coeff_pred_std = [zeros([M-size(coeff_pred_std,1) , size(coeff_pred_std,2)]) ; coeff_pred_std];
+coeff_pred = sig .* coeff_pred_std + mu;
+
+daypred = coeff_pred * X';
+y_prediction = reshape(daypred, [], 1);
+
+d
+
+%% ======================================================================== DAY-CURVE TRANSFORMATIONS ====================
+% trying to find a a day-curve function/transformation
+
+% data set 
+[~,yimp] = data_store.getmats('all','imp','time');
+
+x = (1:48)';
+y = zeros([data_store.L.d,48]);
+for i = 1:48:length(yimp)-47
+    y((i+47)/48,:) = yimp(i:i+47);
+end
+
+% fits
+degree = 5;
+
+% X = [];
+% for power = 0:degree
+%     X = [X, x.^power];
+% end
+X = [x.^0,...
+    sin(x*2*pi/48), cos(x*2*pi/48),...
+    sin(x*2*pi/24), cos(x*2*pi/24),...
+    sin(x*2*pi/12), cos(x*2*pi/12),...
+    sin(x*2*pi/6),  cos(x*2*pi/6), ...
+    sin(x*2*pi),    cos(x*2*pi)     ];
+coeffs = zeros([size(y,1),size(X,2)]);
+yp = zeros(size(y));
+err = zeros([size(y,1),1]);
+
+for i = 1:size(y,1)
+    coeffs(i,:) = normalEqn(X,y(i,:)');
+    yp(i,:) = X * coeffs(i,:)';
+    err(i) = loss_mse(y(i,:),yp(i,:));
+end
+
+k = 10;
+[~,worst_idcs] = maxk(err,k);
+
+for i = 1:k
+    ind = worst_idcs(i);
+%     ind = i;
+    f = figure(1);
+    hold on
+    plot( y(ind,:))
+    plot(yp(ind,:))
+    axis([1,48,0,200])
+    ttl = ['date: ' datestr(table_days.Date_Time_DTA(ind,:))];
+    title(ttl)
+    hold off
+    sel = menu('View Next Day','Next','Stop');
+    if sel == 2
+        close 1
+        break;
+    end
+    close 1
+end
 
 %% ======================================================================== **ARIMA** ====================================
 
@@ -439,8 +383,8 @@ for i = 1:575
     y_day(:,i) = X(i,:)';
     X_cos = [ones([48,1]),cos(pi/24 * X_day),cos(pi/24 * X_day + 5),cos(pi/24 * X_day + 10),cos(pi/24 * X_day + 20)];
     
-    theta(:,i) = pinv(X_cos'*X_cos)*(X_cos'*y_day(:,i));
-    ypred(:,i) = X_cos * theta(:,i);
+    coeffs(:,i) = pinv(X_cos'*X_cos)*(X_cos'*y_day(:,i));
+    ypred(:,i) = X_cos * coeffs(:,i);
     
     err(i) = sum((ypred(:,i)-y_day(:,i)).^2)/48;
 end
@@ -540,13 +484,5 @@ g1 = gpuArray(in1); % Input gpuArray.
 g2 = gpuArray(in2); % Input gpuArray.
 
 result = feval(k,g1,g2);
-
-
-
-
-
-
-
-
 
 
