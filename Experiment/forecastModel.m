@@ -275,10 +275,10 @@ classdef forecastModel
             
         end
         
-        function [X48pt_,dtArr_,wkdayNames_,y48pt_NaN] = saturate(this,dayInterval)
+        function [X48pt_,dtArr_,wkdayNames_,y48pt_NaN] = saturate(this,dayInterval,nppd)
             % function returns days as 48 point column vectors, filling in missing score values with NaN
             [~,n] = size(this.X);
-            M = 48;     % num of obs per day
+            M = nppd;     % num of obs per day
             dayLen = length(dayInterval);
             
             % instantiate arrays

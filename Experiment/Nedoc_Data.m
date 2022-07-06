@@ -37,8 +37,6 @@ classdef Nedoc_Data
             o.T_imp = TI;
             o.T_day = TD;
             
-            o.L = struct('c',32181, 'i',35328, 'd',736);
-            
             X_cln = [ (o.T_cln.Date) (o.T_cln.Time) (o.T_cln.Weekday) (o.T_cln.Month) ];
             X_imp = [ (o.T_imp.Date) (o.T_imp.Time) (o.T_imp.Weekday) (o.T_imp.Month) ];
             X_day = [ (o.T_day.Date) (o.T_day.Weekday) (o.T_day.Month) ];
@@ -52,6 +50,8 @@ classdef Nedoc_Data
             y_imp = (o.T_imp.Score);
             y_day = (o.T_day.Day_Class);
             o.y = struct('c',y_cln, 'i',y_imp, 'd',y_day);
+            
+            o.L = struct('c',size(o.y.c,1), 'i',size(o.y.i,1), 'd',size(o.y.d,1));
             
             fields = {'c','i','d'} ;
             c = cell(length(fields),1);
@@ -307,9 +307,10 @@ classdef Nedoc_Data
             elseif strcmp(fld,'day')
                 idcurr = find(o.T_day.Date == start, 1, 'last') + 1;
             end
-            plotfig = figure('NumberTitle','off','Name',[figttl,': Daily Plots']);
             
+            plotfig = figure('NumberTitle','off','Name',[figttl,': Daily Plots']);
             for i = 1:nplots
+                isToday = false;
                 subplot(ceil(sqrt(nplots)),ceil(sqrt(nplots)),i)
                 
                 hold on
@@ -320,6 +321,7 @@ classdef Nedoc_Data
                     plot(o.yp.c(dayIdcs), 'r--')
                     if sum(ismember(o.today.c,dayIdcs)) ~= 0
                         xline(o.today.c - dayIdcs(1), 'k-', 'LineWidth', 4);
+                        isToday = true;
                     end
                     plttl = [o.T_cln.WKD_Name(idcurr,:) ', '...
                         datestr(o.T_cln.Date_Time_DTA(idcurr)) ': Acc = ' num2str(acc) '%'];
@@ -331,6 +333,7 @@ classdef Nedoc_Data
                     plot(o.yp.i(dayIdcs), 'r--')
                     if sum(ismember(o.today.i,dayIdcs)) ~= 0
                         xline(o.today.i, 'k-', 'LineWidth', 4);
+                        isToday = true;
                     end
                     plttl = [o.T_imp.WKD_Name(idcurr,:) ', '...
                         datestr(o.T_imp.Date_Time_DTA(idcurr)) ': Acc = ' num2str(acc) '%'];
@@ -356,8 +359,12 @@ classdef Nedoc_Data
                 title(plttl)
                 xlabel('observations')
                 ylabel('NEDOC Score')
-                if i == 1
+                if i == 1 && isToday
+                    legend('Actual','Predictor','Today','NEDOC Levels')
+                elseif i == 1
                     legend('Actual','Predictor','NEDOC Levels')
+                elseif isToday
+                    legend('Today')
                 end
                 axis([1, dayLen, 0, 200])
                 hold off

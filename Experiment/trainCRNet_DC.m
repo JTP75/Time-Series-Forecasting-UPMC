@@ -113,7 +113,7 @@ options = trainingOptions...
 
 %% TRAIN NETWORK (MAY TAKE A WHILE...) ====================================
 % rng(0);
-net = trainNetwork(XrTrain,YrTrain,layers,options);
+% net = trainNetwork(XrTrain,YrTrain,layers,options);
 plot(net)
 
 
