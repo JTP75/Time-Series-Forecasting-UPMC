@@ -2,13 +2,12 @@ classdef NedocData
     
     properties
         % tables
-        T_org
-        T_imp                               % imputed table:    missing observations are filled with linearly spaced scores
+        T_org                               % original imputed table:   filled missing times with linspace vals
+        T_imp                               % imputed table:            downsampled version of above table
         
         % input matrix struct
         X                                   % X (contains serial date and time, weekday, and month)
         X_t                                 % X_t (contains only serial date-time)
-        X_lag                               % lag matrix
         
         % target & response vector structs
         y                                   % target
@@ -29,12 +28,13 @@ classdef NedocData
         % constructor
         function o = NedocData(TI,NPPD)
             o.T_org = TI;
-            o = o.setPPD(NPPD);
             o.T_imp = o.T_org;
+            
+            o = o.setPPD(NPPD);
             
             o.X = [ (o.T_imp.Date) (o.T_imp.Time) (o.T_imp.Weekday) (o.T_imp.Month) ];
             o.X_t = o.T_imp.Date_Time;
-            o.X_lag = [];
+            o.yp = {};
             
             o.L = height(o.T_imp);
         end
@@ -44,9 +44,9 @@ classdef NedocData
             if strcmp(setspec,'train')
                 idcs = 1:o.today.i;
             elseif strcmp(setspec,'test')
-                idcs = (o.today.i + 1):o.L.i;
+                idcs = (o.today.i + 1):o.L;
             elseif strcmp(setspec,'all')
-                idcs = 1:o.L.i;
+                idcs = 1:o.L;
             else
                 desc = 'setspec (first) arg must be ''train'', ''test'', or ''all''';
                 ME = MException('NedocData:getmats:Invalid_Arg',desc);
@@ -59,11 +59,8 @@ classdef NedocData
             elseif strcmp(fulTimLag,'time')
                 X = o.X_t(idcs,:);
                 y = o.y(idcs);
-            elseif strcmp(fulTimLag,'lag')
-                X = o.X_lag(idcs,:);
-                y = o.y(idcs);
             else
-                desc = 'matrix specifier (second) arg must be ''full'', ''time'', or ''lag''';
+                desc = 'matrix specifier (second) arg must be ''full'' or ''time''';
                 ME = MException('NedocData:getmats:Invalid_Arg',desc);
                 throw(ME)
             end
@@ -74,13 +71,22 @@ classdef NedocData
         end
         
         % mutators
-        function o = setResp(o,ypred)
+        function o = pushResp(o,ypred,label)
             if length(ypred) ~= o.L
-                desc = ['Length of arg ' num2str(length(ypred)) 'does not match imputed length ' num2str(o.L)];
+                desc = ['Length of arg (' num2str(length(ypred)) ') does not match imputed length (' num2str(o.L) ')'];
                 ME = MException('NedocData:setResp:Invalid_Arg',desc);
                 throw(ME)
             end
-            o.yp = ypred;
+            o.yp{1,end+1} = ypred;
+            o.yp{2,end} = label;
+        end
+        function o = popResp(o)
+            if length(o.yp) < 1
+                desc = 'yp cell array is aleady empty!';
+                ME = MException('NedocData:popResp:Empty_Pop',desc);
+                throw(ME)
+            end
+            o.yp(:,end) = [];
         end
         function o = setToday(o,tdin)   % td is a serial date or date string 'mm/dd/yyyy'
             if isa(tdin,'char')
@@ -133,25 +139,34 @@ classdef NedocData
             
             o.X = [ (o.T_imp.Date) (o.T_imp.Time) (o.T_imp.Weekday) (o.T_imp.Month) ];
             o.X_t = o.T_imp.Date_Time;
-            o.X_lag = [];
             
             o.y = o.T_imp.Score;
             o.yp = [];              % <------- clear yp
             
             o.L = height(o.T_imp);
-            o = o.setToday(o.today.dts);
-            
+            if ~isempty(o.today)
+                o = o.setToday(o.today.dts);
+            end
         end
         
         % visualizers
-        function [plotfig,avg_acc] = plot(o, ttl, startIn, nplots, varargin)
+        function [plotfig,accarr] = plot(o, ttl, startIn, nplots, varargin)
             % arg processing
             if isa(startIn,'char')
                 if strcmp(startIn,'tmr')    % natural place to start: day after training set ends
                     start = o.today.dt;
                 else
-                    start = datenum(startIn,'mm/dd/yyyy');
-                    start = start - 1;
+                    startIn_substr = startIn([1,2,3,4]);
+                    if strcmp(startIn_substr,'tmr+')
+                        addend_substr = startIn(5);
+                        start = o.today.dt + str2num(addend_substr); %#ok<ST2NM>
+                    elseif strcmp(startIn_substr,'tmr-')
+                        diff_substr = startIn(5);
+                        start = o.today.dt - str2num(diff_substr); %#ok<ST2NM>
+                    else
+                        start = datenum(startIn,'mm/dd/yyyy');
+                        start = start - 1;
+                    end
                 end
             else
                 start = startIn;
@@ -165,28 +180,49 @@ classdef NedocData
             end
             
             figttl = ttl;
-            accarr = zeros([1,nplots]);
+            accarr = zeros([size(o.yp,2),nplots]);
             idcurr = find(o.T_imp.Date == start, 1, 'last') + 1;
             plotfig = figure('NumberTitle','off','Name',[figttl,': Daily Plots']);
             for i = 1:nplots
+                yp_sum = zeros([o.PPD,1]);
                 isToday = false;
+                
+                if o.T_imp.Date(idcurr) >= o.T_imp.Date(end)
+                    fprintf('last day has been reached\n')
+                    break;
+                end
+                
                 subplot(ceil(sqrt(nplots)),ceil(sqrt(nplots)),i)
                 
                 hold on
                 
                 dayIdcs = idcurr:idcurr+o.PPD-1;
                 dayLen = o.PPD;
-                acc = 100 * sum(getLevel(o.y(dayIdcs)) == getLevel(o.yp(dayIdcs))) / dayLen;
-                plot(o.T_imp.Date_Time(dayIdcs), o.y(dayIdcs), 'b-')
-                plot(o.T_imp.Date_Time(dayIdcs), o.yp(dayIdcs), 'r--')
-                if sum(ismember(o.today.i,dayIdcs)) ~= 0
-                    xline(o.today.i, 'k-', 'LineWidth', 4);
-                    isToday = true;
+                
+                leg = {'Actual'};
+                plot(o.T_imp.Date_Time(dayIdcs), o.y(dayIdcs), 'b-', 'LineWidth', 1.5)
+                for ptor = 1:size(o.yp,2)
+                    plot(o.T_imp.Date_Time(dayIdcs), o.yp{1,ptor}(dayIdcs), '--')
+                    acc(ptor,1) = 100 * sum(getLevel(o.y(dayIdcs)) == getLevel(o.yp{1,ptor}(dayIdcs))) / dayLen;
+                    leg{end+1} = o.yp{2,ptor};
+                    yp_sum = yp_sum + o.yp{1,ptor}(dayIdcs);
                 end
-                plttl = [datestr(o.T_imp.WKD_Name(idcurr,:)) ', '...
-                    datestr(o.T_imp.Date_Time_DTA(idcurr)) ': Acc = ' num2str(acc) '%'];
+                
+                yp_mean = yp_sum / size(o.yp,2);
+                plot(o.T_imp.Date_Time(dayIdcs), yp_mean, 'k-.', 'LineWidth', 1.5)
+                leg{end+1} = 'Predictor Mean';
+                
+                [~,wkdname] = weekday(o.T_imp.WKD_Name(idcurr,:));
+                plttl = [wkdname ', '...
+                    datestr(o.T_imp.Date_Time_DTA(idcurr)) ', Acc = ' num2str(mean(acc)) '%' ];
                     
-                accarr(i) = acc;
+                accarr(:,i) = acc;
+                
+                if sum(ismember(o.today.i,dayIdcs)) ~= 0
+                    xline(o.today.dt+1, 'k-', 'LineWidth', 4);
+                    isToday = true;
+                    leg{end+1} = 'Today';
+                end
                 
                 super_suit = ones([dayLen,1]);
                 lspec = 'g:';
@@ -195,25 +231,21 @@ classdef NedocData
                 plot(o.T_imp.Date_Time(dayIdcs), 100*super_suit,lspec);
                 plot(o.T_imp.Date_Time(dayIdcs), 140*super_suit,lspec);
                 plot(o.T_imp.Date_Time(dayIdcs), 200*super_suit,lspec);
+                leg{end+1} = 'NEDOC Levels';
                 
                 title(plttl)
                 xlabel('time')
                 ylabel('NEDOC Score')
-                if i == 1 && isToday
-                    legend('Actual','Predictor','Today','NEDOC Levels')
-                elseif i == 1
-                    legend('Actual','Predictor','NEDOC Levels')
-                elseif isToday
-                    legend('Today')
+                if i == 1 || isToday
+                    legend(leg)
                 end
                 
-                axis([o.T_imp.Date_Time(dayIdcs(1)), o.T_imp.Date_Time(dayIdcs(end)), 0, 200])
+                axis([o.T_imp.Date_Time(dayIdcs(1)), o.T_imp.Date_Time(dayIdcs(end)+1), 0, 200])
                 datetick('x','HH:mm PM','keepticks')
                 hold off
                 
                 idcurr = dayIdcs(dayLen) + 1;
             end
-            avg_acc = mean(accarr);
         end
         
     end

@@ -1,16 +1,16 @@
-function [net,mu,sig,XrAll] = trainCRNet_DC(data_store,lags,ymat)
+function [net,mu,sig,XrAll] = trainCRNet_DC(data_store,lags,ymat,ep)
 % ARCRIN: AutoRegressive Convolutional-Recurrent Integrated Network 
 
 
 %% OPTIONS ================================================================
 Lag = lags;
 MiniBatchSize = 64;        % max(Lag) * size(ymat,2);
-MaxEpochs = 150;
-learningrate = 0.00311;     % 0.00611
+MaxEpochs = ep;
+learningrate = 0.004;     % 0.00611
 solver = "adam";
 
 %% LOAD DATA ==============================================================
-td = data_store.today.d;
+td = round(data_store.today.i / data_store.PPD);
 y = ymat;
 y_train = ymat(1:td,:);
 mu = mean(y_train);
@@ -113,7 +113,7 @@ options = trainingOptions...
 
 %% TRAIN NETWORK (MAY TAKE A WHILE...) ====================================
 % rng(0);
-% net = trainNetwork(XrTrain,YrTrain,layers,options);
+net = trainNetwork(XrTrain,YrTrain,layers,options);
 plot(net)
 
 
