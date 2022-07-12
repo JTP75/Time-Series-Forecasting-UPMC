@@ -1,10 +1,10 @@
 function [X_train, y_train, X_test, y_test] = splitData(X, y, training_proportion)
 
-[m_examples, n_features] = size(X);                                         % get size of x
+[m_examples, ~] = size(X);                                                  % get size of x
 ti = randperm(m_examples, round(m_examples*training_proportion));           % create array of random indices (in X1)
 for i = 1:round(m_examples*training_proportion)                             % fill training data with training indices
-    X_train(i,1:n_features) = X(ti(i),1:n_features);                        % **
-    y_train(i,1) = y(ti(i));                                                % **
+    X_train(i,:) = X(ti(i),:);                        % **
+    y_train(i,:) = y(ti(i),:);                                                % **
 end                                                                         % **
 k = 1;                                                                      % temp k is index for test data
 for i = 1:m_examples                                                        % loop i through examples
@@ -15,8 +15,8 @@ for i = 1:m_examples                                                        % lo
         end                                                                 %   to 1 (true)
     end                                                                     % **
     if match == 0                                                           % skip if there is a match
-        X_test(k,1:n_features) = X(i,1:n_features);                         % **
-        y_test(k,1) = y(i);                                                 % **
+        X_test(k,:) = X(i,:);                                               % **
+        y_test(k,:) = y(i,:);                                               % **
         k = k + 1;                                                          % **
     end                                                                     % ****** fills testing sets with data that is
 end                                                                         % ****** not already in the training set

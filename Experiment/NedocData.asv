@@ -12,6 +12,7 @@ classdef NedocData
         % target & response vector structs
         y                                   % target
         yp                                  % response
+        yp_mean                             % mean curve of responses (ensemble)
         
         % boundary struct
         today                               % todays date struct (marks training/testing split)
@@ -34,7 +35,7 @@ classdef NedocData
             
             o.X = [ (o.T_imp.Date) (o.T_imp.Time) (o.T_imp.Weekday) (o.T_imp.Month) ];
             o.X_t = o.T_imp.Date_Time;
-            o.yp = {};
+            o.yp = cell(2,0);
             
             o.L = height(o.T_imp);
         end
@@ -79,6 +80,7 @@ classdef NedocData
             end
             o.yp{1,end+1} = ypred;
             o.yp{2,end} = label;
+            o = o.updateMean;
         end
         function o = popResp(o)
             if length(o.yp) < 1
@@ -87,6 +89,7 @@ classdef NedocData
                 throw(ME)
             end
             o.yp(:,end) = [];
+            o = o.updateMean;
         end
         function o = setToday(o,tdin)   % td is a serial date or date string 'mm/dd/yyyy'
             if isa(tdin,'char')
@@ -150,7 +153,7 @@ classdef NedocData
         end
         
         % visualizers
-        function [plotfig,accarr] = plot(o, ttl, startIn, nplots, varargin)
+        function plotfig = plot(o, ttl, startIn, nplots, varargin)
             % arg processing
             if isa(startIn,'char')
                 if strcmp(startIn,'tmr')    % natural place to start: day after training set ends
@@ -171,16 +174,14 @@ classdef NedocData
             else
                 start = startIn;
             end
-            periods = {'days','weeks'};
-            period = periods{1};
+            showmean= true;
             for i = 1:2:length(varargin)
-                if strcmp('TimeFrame',varargin{i}) && any(strcmp(periods,varargin{i+1}))
-                    period = varargin{i+1};
+                if strcmp('ShowMean',varargin{i})
+                    showmean = varargin{i+1};
                 end
             end
             
             figttl = ttl;
-            accarr = zeros([size(o.yp,2),nplots]);
             idcurr = find(o.T_imp.Date == start, 1, 'last') + 1;
             plotfig = figure('NumberTitle','off','Name',[figttl,': Daily Plots']);
             for i = 1:nplots
@@ -200,7 +201,7 @@ classdef NedocData
                 dayLen = o.PPD;
                 
                 leg = {'Actual'};
-                plot(o.T_imp.Date_Time(dayIdcs), o.y(dayIdcs), 'b-')
+                plot(o.T_imp.Date_Time(dayIdcs), o.y(dayIdcs), 'b-', 'LineWidth', 1.5)
                 for ptor = 1:size(o.yp,2)
                     plot(o.T_imp.Date_Time(dayIdcs), o.yp{1,ptor}(dayIdcs), '--')
                     acc(ptor,1) = 100 * sum(getLevel(o.y(dayIdcs)) == getLevel(o.yp{1,ptor}(dayIdcs))) / dayLen;
@@ -208,15 +209,14 @@ classdef NedocData
                     yp_sum = yp_sum + o.yp{1,ptor}(dayIdcs);
                 end
                 
-                yp_mean = yp_sum / size(o.yp,2);
-                plot(o.T_imp.Date_Time(dayIdcs), yp_mean, '--')
-                leg{end+1} = 'Predictor Mean';
+                if showmean
+                    yp_mean = yp_sum / size(o.yp,2);
+                    plot(o.T_imp.Date_Time(dayIdcs), yp_mean, 'k-.', 'LineWidth', 1.5)
+                    leg{end+1} = 'Predictor Mean';
+                end
                 
                 [~,wkdname] = weekday(o.T_imp.WKD_Name(idcurr,:));
-                plttl = [wkdname ', '...
-                    datestr(o.T_imp.Date_Time_DTA(idcurr)) ', Acc = ' num2str(mean()) ];
-                    
-                accarr(:,i) = acc;
+                plttl = [ wkdname ', ' datestr(o.T_imp.Date_Time_DTA(idcurr)) ];
                 
                 if sum(ismember(o.today.i,dayIdcs)) ~= 0
                     xline(o.today.dt+1, 'k-', 'LineWidth', 4);
@@ -246,6 +246,42 @@ classdef NedocData
                 
                 idcurr = dayIdcs(dayLen) + 1;
             end
+        end
+        function accs = predictorAccs(o, setspec)
+            if strcmp(setspec,'train')
+                idcs = 1:o.today.i;
+            elseif strcmp(setspec,'test')
+                idcs = (o.today.i+1):o.L;
+            elseif strcmp(setspec,'all')
+                idcs = 1:o.L;
+            else
+                desc = 'setspec argument must be ''train'', ''test'', or ''all''';
+                ME = MException('NedocData:predictorAccs:Invalid_arg',desc);
+                throw(ME);
+            end
+            
+            accs = cell(size(o.yp,2)+1,2);
+            for i = 1:size(o.yp,2)
+                accs{i,1} = o.yp{2,i};
+                accs{i,2} = 100 * sum(getLevel(o.yp{1,i}(idcs)) == getLevel(o.y(idcs))) / length(idcs);
+            end
+            accs{i+1,1} = 'Predictor Mean';
+            accs{i+1,2} = 100 * sum(getLevel(o.yp_mean(idcs)) == getLevel(o.y(idcs))) / length(idcs);
+        end
+        
+    end
+    
+    methods(Access = private)
+        
+        function o = updateMean(o)
+            if
+            cumsum = zeros(size(o.yp{1,1}));
+            i = 1;
+            while ~isEmpty(o.yp{1,i})
+                cumsum = cumsum + o.yp{1,i};
+                i=i+1;
+            end
+            o.yp_mean = cumsum / (i-1);
         end
         
     end
