@@ -1,67 +1,151 @@
 %% ======================================================================== FULL DATA SET (288 obs per day) ===================
 load FULL_IMPUTED.mat
-ds_full = NedocData(TI_full,288);
-ds_full = ds_full.setToday(0.95);
-ds_full = ds_full.setPPD(48);
-ARCRINpreds = ds_full;
-ppd = ds_full.PPD;
+ds_base = NedocData(TI_full,288);
+ds_base = ds_base.setToday(0.95);
+ds_base = ds_base.setPPD(48);
+ds_ARC = ds_base;
+ds_RNN0 = ds_base;
+ppd = ds_base.PPD;
 disp('.')
 
-%% ======================================================================== DAY CURVE TRANSFORM ===============================
-% getmats
-[~,yimp] = ds_full.getmats('all','time');
+%% ======================================================================== PCA ===============================================
 
-x = (1:ppd)';
-y = zeros([ds_full.L/ppd,ppd]);
-for i = 1:ppd:length(yimp)-(ppd-1)
-    y((i+(ppd-1))/ppd,:) = yimp(i:i+(ppd-1));
+daymat = ds_base.getmats('all','days')';
+meand = mean(daymat,2);
+stdd = std(daymat,0,2);
+daymat_std = (daymat - meand) ./ stdd;
+
+covmat = daymat_std * daymat_std';
+all_eigvals = flip(eig(covmat));
+total_variance = sum(all_eigvals);
+for k = 1:20
+    captured_variance(k) = sum(all_eigvals(1:k))/total_variance; %#ok<SAGROW>
 end
+K = 9;
+eigvals = all_eigvals(1:K);
+[eigvecs,~] = eigs(covmat,K);
+weights = eigvecs' * daymat;
 
-% fits
-transform = [x.^0,...
-    sin(x*2*pi/ppd), cos(x*2*pi/ppd),...
-    sin(x*2*pi/(ppd/2)), cos(x*2*pi/(ppd/2)),...
-    sin(x*2*pi/(ppd/4)), cos(x*2*pi/(ppd/4)),...
-    sin(x*2*pi/(ppd/8)), cos(x*2*pi/(ppd/8))     ];
-y_trans = zeros([size(y,1),size(transform,2)]);
+%% view reconstr
+y_reconstr = (eigvecs*weights)';
+y_prediction = reshape(y_reconstr', [], 1);
+ds_base = ds_base.pushResp(y_prediction,'PCA');
+plotfig = ds_base.plot('View Transform', 'tmr-9', 25, 'Showmean', false)                       %#ok<NOPTS>
+ds_base.getaccs('all')
+ds_base = ds_base.popResp;
+%%
 
-for i = 1:size(y,1)
-    y_trans(i,:) = normalEqn(transform,y(i,:)');
-end
-
-% view transform
-transformed_y = y_trans * transform';
-y_prediction = reshape(transformed_y', [], 1);
-ds_full = ds_full.pushResp(y_prediction,'trans');
-[~,avgacc] = ds_full.plot('View Transform', 'tmr', 9)                       %#ok<NOPTS>
-ds_full = ds_full.popResp;
+ys = y';
+mu0 = mean(ys,2);
+sig0 = std(ys,0,2);
+ys = (ys-mu0)./sig0;
+[W,evects] = PCA(ys,0.90);
     
 %% ======================================================================== TRAIN ARCRIN ======================================
-for modelnum = 1:20
-M = height(ds_full.T_imp) / ppd;
+% for modelnum = 1:20
+M = height(ds_base.T_imp) / ppd;
 lags = 1:14;
-[crnet, mu, sig, transform, Xcell] = trainARCRIN(ds_full, lags, 200);         % Xr is standardized lag matrix
+[crnet, mu1, sig1, Xcell] = trainARCRIN(ds_base, lags, 200, y', 'enablePCA', true);
 
-% %% ======================================================================== PREDICT & ADD TO STORE ============================
-coeff_pred_std = predict( crnet, Xcell, "ExecutionEnvironment",'gpu', "MiniBatchSize",max(lags)*size(transform,2) );
-coeff_pred_std = cast(coeff_pred_std,"double");
-coeff_pred_std = [zeros([M-size(coeff_pred_std,1) , size(coeff_pred_std,2)]) ; coeff_pred_std];
-coeff_pred = sig .* coeff_pred_std + mu;
+%% ======================================================================== PREDICT & ADD TO STORE ============================
+Wpred_std = predict( crnet, Xcell, "ExecutionEnvironment",'gpu', "MiniBatchSize",64 );
+Wpred_std = cast(Wpred_std,"double");
+Wpred_std = [zeros([M-size(Wpred_std,1) , size(Wpred_std,2)]) ; Wpred_std];
+Wpred = sig1 .* Wpred_std + mu1;
 
-daypred = coeff_pred * transform';
-y_prediction = reshape(daypred', [], 1);
+daypred = Wpred;%*evects;
+% daypred = (sig0 .* daypred + mu0)';
+y_prediction = reshape(daypred, [], 1);
 
-lbl = ['Validation v' num2str(modelnum)];
-ARCRINpreds = ARCRINpreds.pushResp(y_prediction,lbl);
-end
+% lbl = ['Validation v' num2str(modelnum)];
+lbl = 'PrePCA ARCRIN';
+ds_ARC = ds_ARC.pushResp(y_prediction,lbl);
+% end
+
+
+
+%% ======================================================================== PROP =============================================
+%% lode
+[Xr,Yr,C,T] = dataprep_shell(ds_base,'Validate',false,'Lags',1:14,'PCApcnt',[0.90,0.90]);
+NET_architectures;
+%% trane
+net = train_network(Xr,Yr);
+%% predic
+yp = predict_net(net,Xr.all,C,T);
+ds_ARC = ds_ARC.pushResp(yp,'RNN0 Bayesian Opt');
 
 %% ======================================================================== PLOT =============================================
-atestfig = ARCRINpreds.plot('ARCRIN Predictors', 'tmr', 16, 'ShowMean', true);
-arcacc = ARCRINpreds.predictorAccs('test');
+atestfig = ds_ARC.plot('Network Predictors', 'tmr-4', 16, 'Showmean', false);
+arcacc = ds_ARC.getaccs('test',1);
 fprintf('\n===========================\n')
 for i = 1:size(arcacc,1)
     fprintf([arcacc{i,1} ': acc = %.2f%%\n'],arcacc{i,2});
 end
+
+%% ======================================================================== ENS RNN0 =========================================
+num_mdls = 20;
+
+[Xr,Yr,C,T] = dataprep_shell(ds_base,'Validate',false,'Lags',1:14,'PCApcnt',[0.90,0.90]);
+NET_architectures;
+
+networks = {};
+for mn = 1:num_mdls
+    networks{end+1} = train_network(Xr,Yr,'Layers',nets.RNN0,'Fold',false); %#ok<SAGROW>
+end
+
+yps = {};
+for mn = 1:num_mdls
+    yps{end+1} = predict_net(networks{mn},Xr.all,C,T); %#ok<SAGROW>
+    ds_RNN0 = ds_RNN0.pushResp(yps{end},['RNN0: ' num2str(mn)]);
+end
+
+%% ======================================================================== PLOT =============================================
+plotfig = ds_RNN0.plot('RNN Predictor Ensemble', 'tmr', 16, 'Showmean', true);
+RNNaccs = ds_RNN0.getaccs('test');
+fprintf('\n===========================\n')
+for i = 1:size(RNNaccs,1)
+    fprintf([RNNaccs{i,1} ': acc = %.2f%%\n'],RNNaccs{i,2});
+end
+
+%% ======================================================================== OPTIMIZE RNN0 ====================================
+% rnn0 is fast, accurate, and (relatively) easy to train. will now perform
+% bayesian optimization:
+
+OptVars = ...
+[
+    optimizableVariable('gru_size',[16 256],'Type','integer')
+    optimizableVariable('lstm_size',[16 256],'Type','integer')
+    optimizableVariable('bilstm_size',[16 256],'Type','integer')
+    optimizableVariable('bilstm_dropfactor',[0.1,1],'Type','real')
+    optimizableVariable('dropout_pcnt',[0 1],'Type','real')
+    optimizableVariable('LR_init',[1e-5 1e-2],'Transform','log')
+    optimizableVariable('LR_dropPeriod',[10 100],'Type','integer')
+    optimizableVariable('LR_dropFactor',[0.1 1],'Type','real')
+    optimizableVariable('grad_threshold',[0.1 1],'Type','real')
+];
+
+[Xr,Yr,C,T] = dataprep_shell(ds_base,'Validate',true,'Lags',1:14,'PCApcnt',[0.90,0.90]);
+objfcn = makeObjFcn(Xr.train,Yr.train,Xr.valid,Yr.valid);
+
+BayesObject = bayesopt(objfcn,OptVars, ...
+    'MaxTime',10*60*60, ...
+    'IsObjectiveDeterministic',false, ...
+    'UseParallel',true);
+
+%% ======================================================================== WEEK PREDICTOR ==================================
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

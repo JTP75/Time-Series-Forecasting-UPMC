@@ -19,6 +19,7 @@ classdef NedocData
         
         % definitions
         L                                   % length
+        L_day                               % numdays
         mu                                  % mean (TRAINING DATA)
         sig                                 % stdev (TRAINING DATA)
         PPD                                 % num of obs per day
@@ -38,10 +39,11 @@ classdef NedocData
             o.yp = cell(2,0);
             
             o.L = height(o.T_imp);
+            o.L_day = length(unique(o.T_imp.Date));
         end
         
         % accessors
-        function [X,y] = getmats(o,setspec,fulTimLag,std)
+        function [X,y] = getmats(o,setspec,matspec,std)
             if strcmp(setspec,'train')
                 idcs = 1:o.today.i;
             elseif strcmp(setspec,'test')
@@ -54,14 +56,20 @@ classdef NedocData
                 throw(ME)
             end
             
-            if strcmp(fulTimLag,'full')
+            if strcmp(matspec,'full')
                 X = o.X(idcs,:);
                 y = o.y(idcs);
-            elseif strcmp(fulTimLag,'time')
+            elseif strcmp(matspec,'time')
                 X = o.X_t(idcs,:);
                 y = o.y(idcs);
+            elseif strcmp(matspec,'days')
+                X = zeros([round(length(idcs))/o.PPD,o.PPD]);
+                for i = 1:o.PPD:length(idcs)-(o.PPD-1)
+                    X((i+(o.PPD-1))/o.PPD,:) = o.y(i:i+(o.PPD-1));
+                end
+                y = [];
             else
-                desc = 'matrix specifier (second) arg must be ''full'' or ''time''';
+                desc = 'matrix specifier (second) arg must be ''full'', ''time'', or ''days''';
                 ME = MException('NedocData:getmats:Invalid_Arg',desc);
                 throw(ME)
             end
@@ -77,6 +85,9 @@ classdef NedocData
                 desc = ['Length of arg (' num2str(length(ypred)) ') does not match imputed length (' num2str(o.L) ')'];
                 ME = MException('NedocData:setResp:Invalid_Arg',desc);
                 throw(ME)
+            end
+            if mean(ypred) <= 1 && mean(ypred) >= -1
+                ypred = o.sig .* ypred + o.mu;
             end
             o.yp{1,end+1} = ypred;
             o.yp{2,end} = label;
@@ -176,7 +187,7 @@ classdef NedocData
             end
             showmean= true;
             for i = 1:2:length(varargin)
-                if strcmp('ShowMean',varargin{i})
+                if strcmp('Showmean',varargin{i})
                     showmean = varargin{i+1};
                 end
             end
@@ -210,8 +221,8 @@ classdef NedocData
                 end
                 
                 if showmean
-                    yp_mean = yp_sum / size(o.yp,2);
-                    plot(o.T_imp.Date_Time(dayIdcs), yp_mean, 'k-.', 'LineWidth', 1.5)
+                    yp_mean = yp_sum / size(o.yp,2); %#ok<PROPLC>
+                    plot(o.T_imp.Date_Time(dayIdcs), yp_mean, 'k-.', 'LineWidth', 1.5) %#ok<PROPLC>
                     leg{end+1} = 'Predictor Mean';
                 end
                 
@@ -247,7 +258,7 @@ classdef NedocData
                 idcurr = dayIdcs(dayLen) + 1;
             end
         end
-        function accs = predictorAccs(o, setspec)
+        function accs = getaccs(o, setspec, tolerance)
             if strcmp(setspec,'train')
                 idcs = 1:o.today.i;
             elseif strcmp(setspec,'test')
@@ -260,14 +271,26 @@ classdef NedocData
                 throw(ME);
             end
             
-            accs = cell(size(o.yp,2)+1,2);
-            for i = 1:size(o.yp,2)
-                accs{i,1} = o.yp{2,i};
-                accs{i,2} = 100 * sum(getLevel(o.yp{1,i}(idcs)) == getLevel(o.y(idcs))) / length(idcs);
-            end
-            if ~isempty(o.yp_mean)
-                accs{i+1,1} = 'Predictor Mean';
-                accs{i+1,2} = 100 * sum(getLevel(o.yp_mean(idcs)) == getLevel(o.y(idcs))) / length(idcs);
+            if nargin == 2
+                accs = cell(size(o.yp,2)+1,2);
+                for i = 1:size(o.yp,2)
+                    accs{i,1} = o.yp{2,i};
+                    accs{i,2} = 100 * sum(getLevel(o.yp{1,i}(idcs)) == getLevel(o.y(idcs))) / length(idcs);
+                end
+                if ~isempty(o.yp_mean)
+                    accs{i+1,1} = 'Predictor Mean';
+                    accs{i+1,2} = 100 * sum(getLevel(o.yp_mean(idcs)) == getLevel(o.y(idcs))) / length(idcs);
+                end
+            else
+                accs = cell(size(o.yp,2)+1,2);
+                for i = 1:size(o.yp,2)
+                    accs{i,1} = o.yp{2,i};
+                    accs{i,2} = 100 * sum(abs(getLevel(o.yp{1,i}(idcs))-getLevel(o.y(idcs))) <= tolerance) / length(idcs);
+                end
+                if ~isempty(o.yp_mean)
+                    accs{i+1,1} = 'Predictor Mean';
+                    accs{i+1,2} = 100 * sum(abs(getLevel(o.yp_mean(idcs))-getLevel(o.y(idcs))) <= tolerance) / length(idcs);
+                end
             end
         end
         

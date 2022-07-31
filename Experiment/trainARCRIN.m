@@ -1,5 +1,15 @@
-function [net, mean_vect, std_vect, transmat, Xr] = trainARCRIN(ds,Lag,MaxEpochs)
-% takes day curve coeffs as ymat
+function [net, mean_vect, std_vect, Xr, extra_arg_out1] = trainARCRIN(ds,Lag,MaxEpochs,y_input,varargin)
+% takes day curve vals as y_input
+
+PCAen = false;
+PCA_pcnt = 0.90;
+for arg_idx = 1:2:length(varargin)
+    if strcmp('enablePCA',varargin{arg_idx})
+        PCAen = varargin{arg_idx+1};
+    elseif strcmp('PCApcnt',varargin{arg_idx})
+        PCA_pcnt = varargin{arg_idx+1};
+    end
+end
 
 %% OPTIONS ================================================================
 MiniBatchSize = 64;
@@ -7,8 +17,7 @@ learningrate = 0.004;
 solver = "adam";
 
 %% PREP DATA ==============================================================
-[transmat,ymat] = transformDayCurves(ds);
-
+ymat = y_input';
 td = floor(ds.today.i / ds.PPD);
 y_trANDval = ymat(1:td,:);
 
@@ -27,6 +36,15 @@ y = ymat(Lag(end)+1:end,:)';
 X_trANDval = lagmatrix(y_trANDval, Lag);
 X_trANDval = X_trANDval(Lag(end)+1:end,:)';
 y_trANDval = y_trANDval(Lag(end)+1:end,:)';
+
+if PCAen
+    [weights,eigen_vectors] = PCA(X_trANDval,PCA_pcnt);
+    extra_arg_out1 = eigen_vectors';
+    weights_all = extra_arg_out1 * X;
+    
+    X = weights_all;
+    X_trANDval = weights;
+end
 
 % split train and valid
 [Xtr, ytr, Xvl, yvl] = splitData(X_trANDval', y_trANDval', 0.8);
