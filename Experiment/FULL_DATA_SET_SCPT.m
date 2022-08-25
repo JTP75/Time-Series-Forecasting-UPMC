@@ -75,7 +75,7 @@ yp = predict_net(net,Xr.all,C,T);
 ds_ARC = ds_ARC.pushResp(yp,'RNN0 Bayesian Opt');
 
 %% ======================================================================== PLOT =============================================
-atestfig = ds_ARC.plot('Network Predictors', 'tmr-4', 16, 'Showmean', false);
+atestfig = ds_ARC.plot('Network Predictors', 'tmr', 16, 'Showmean', false);
 arcacc = ds_ARC.getaccs('test',1);
 fprintf('\n===========================\n')
 for i = 1:size(arcacc,1)
@@ -133,13 +133,51 @@ BayesObject = bayesopt(objfcn,OptVars, ...
     'UseParallel',true);
 
 %% ======================================================================== WEEK PREDICTOR ==================================
+daymat = ds_base.getmats('all','days');
+% predict the mean score on days within ~1 week in the future
+lag = 1:14;
+daymeans = mean(daymat,2);
+lagmat = lagmatrix(daymeans,lag);
 
+xtr = lagmat(1:round(length(lagmat)*0.95),:);
+ytr = daymeans(1:round(length(lagmat)*0.95));
+xal = lagmat;
+yal = daymeans;
 
+xtr = xtr(lag(end)+1:end,:);
+ytr = ytr(lag(end)+1:end,:);
+xal = xal(lag(end)+1:end,:);
+yal = yal(lag(end)+1:end,:);
 
+cent = struct('mu',mean(xtr),'sig',std(xtr));
+xtr_std = (xtr - cent.mu) ./ cent.sig;
+xal_std = (xal - cent.mu) ./ cent.sig;
 
+Xr = mat2cellR(xal_std);
+Xr_train = mat2cellR(xtr_std);
+Yr = yal;
+Yr_train = ytr;
 
+%% trane
+opts = trainingOptions( ...
+    "adam", ...
+    'MaxEpochs',            200, ...
+    'GradientThreshold',    0.37957, ...
+    'InitialLearnRate',     0.00144, ...
+    'LearnRateSchedule',    "piecewise", ...
+    'LearnRateDropPeriod',  93, ...
+    'LearnRateDropFactor',  0.21244, ...
+    'MiniBatchSize',        64, ...
+    'Verbose',              true, ...
+    'Shuffle',              "every-epoch", ...
+    'ExecutionEnvironment', 'gpu' ...
+);
+wknet = train_network(Xr_train,Yr_train,'Options',opts);
 
-
+%% pred
+mpred = predict( wknet, Xr, "ExecutionEnvironment",'gpu', "MiniBatchSize",64 );
+mpred = cast(mpred,"double");
+mpred = [100*ones([lag(end),1]) ; mpred];
 
 
 

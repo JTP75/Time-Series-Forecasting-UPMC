@@ -43,7 +43,35 @@ classdef NedocData
         end
         
         % accessors
-        function [X,y] = getmats(o,setspec,matspec,std)
+        function [X,y] = getmats(o,varargin)
+            
+            % defaults
+            setspec = 'all';
+            matspec = 'days';
+            ndays = 1;
+            lagspec = 1:14;
+            doLag = false;
+            useCellsForX = false;
+            
+            for i = 1:2:length(varargin)
+                if strcmp(varargin{i},'setspec')
+                    setspec = varargin{i+1};
+                elseif strcmp(varargin{i},'matspec')
+                    matspec = varargin{i+1};
+                elseif strcmp(varargin{i},'ndays')
+                    ndays = varargin{i+1};
+                elseif strcmp(varargin{i},'cell')
+                    useCellsForX = varargin{i+1};
+                elseif strcmp(varargin{i},'lag')
+                    doLag = varargin{i+1};
+                elseif strcmp(varargin{i},'nlags')
+                    lagspec = varargin{i+1};
+                    if size(lagspec,1) == 1 && size(lagspec,2) == 1
+                        lagspec = 1:lagspec;
+                    end
+                end
+            end
+            
             if strcmp(setspec,'train')
                 idcs = 1:o.today.i;
             elseif strcmp(setspec,'test')
@@ -51,31 +79,57 @@ classdef NedocData
             elseif strcmp(setspec,'all')
                 idcs = 1:o.L;
             else
-                desc = 'setspec (first) arg must be ''train'', ''test'', or ''all''';
+                desc = 'setspec arg must be ''train'', ''test'', or ''all''';
                 ME = MException('NedocData:getmats:Invalid_Arg',desc);
                 throw(ME)
             end
             
-            if strcmp(matspec,'full')
-                X = o.X(idcs,:);
-                y = o.y(idcs);
-            elseif strcmp(matspec,'time')
-                X = o.X_t(idcs,:);
-                y = o.y(idcs);
-            elseif strcmp(matspec,'days')
-                X = zeros([round(length(idcs))/o.PPD,o.PPD]);
-                for i = 1:o.PPD:length(idcs)-(o.PPD-1)
-                    X((i+(o.PPD-1))/o.PPD,:) = o.y(i:i+(o.PPD-1));
+            if doLag
+                if strcmp(matspec,'full')
+                    LM = lagmatrix(o.X,lagspec);
+                    X = LM(idcs,:);
+                    y = o.y(idcs);
+                elseif strcmp(matspec,'time')
+                    LM = lagmatrix(o.X_t,lagspec);
+                    X = LM(idcs,:);
+                    y = o.y(idcs);
+                elseif strcmp(matspec,'days')
+                    dvsr = o.PPD * ndays;
+                    
+                    X = zeros([ floor(length(idcs) / dvsr), dvsr ]);
+                    for i = 1:dvsr:length(idcs) - (dvsr-1)
+                        X((i+(dvsr-1))/dvsr,:) = o.y(i:i+(dvsr-1));
+                    end
+                    y = [];
+                else
+                    desc = 'matspec arg must be ''full'', ''time'', or ''days''';
+                    ME = MException('NedocData:getmats:Invalid_Arg',desc);
+                    throw(ME)
                 end
-                y = [];
             else
-                desc = 'matrix specifier (second) arg must be ''full'', ''time'', or ''days''';
-                ME = MException('NedocData:getmats:Invalid_Arg',desc);
-                throw(ME)
+                if strcmp(matspec,'full')
+                    X = o.X(idcs,:);
+                    y = o.y(idcs);
+                elseif strcmp(matspec,'time')
+                    X = o.X_t(idcs,:);
+                    y = o.y(idcs);
+                elseif strcmp(matspec,'days')
+                    dvsr = o.PPD * ndays;
+                    
+                    X = zeros([ floor(length(idcs) / dvsr), dvsr ]);
+                    for i = 1:dvsr:length(idcs) - (dvsr-1)
+                        X((i+(dvsr-1))/dvsr,:) = o.y(i:i+(dvsr-1));
+                    end
+                    y = [];
+                else
+                    desc = 'matspec arg must be ''full'', ''time'', or ''days''';
+                    ME = MException('NedocData:getmats:Invalid_Arg',desc);
+                    throw(ME)
+                end
             end
             
-            if nargin >= 4 && strcmp(std,'std')
-                y = (y-o.mu)./o.sig;
+            if useCellsForX
+                X = mat2cellR(X);
             end
         end
         

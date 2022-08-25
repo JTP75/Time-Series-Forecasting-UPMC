@@ -24,7 +24,7 @@ for arg_idx = 1:2:length(varargin)
 end
 
 % get data
-MMM = ds.getmats('all','days');
+MMM = ds.getmats('setspec','all','matspec','days');
 day_matrix = MMM;
 td = floor(ds.today.i / ds.PPD);
 vd = floor(vpcnt * td);
