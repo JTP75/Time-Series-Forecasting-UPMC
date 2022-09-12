@@ -69,7 +69,7 @@ ds_ARC = ds_ARC.pushResp(y_prediction,lbl);
 [Xr,Yr,C,T] = dataprep_shell(ds_base,'Validate',false,'Lags',1:14,'PCApcnt',[0.90,0.90]);
 NET_architectures;
 %% trane
-net = train_network(Xr,Yr,'Plot',true);
+net = train_network(Xr,Yr,'Plot',false);
 %% predic
 yp = predict_net(net,Xr.all,C,T);
 ds_ARC = ds_ARC.pushResp(yp,'RNN0 Bayesian Opt');
@@ -183,8 +183,12 @@ mpred = [100*ones([lag(end),1]) ; mpred];
 
 
 
+%%
 
-
+err = RMSE_centered(ds_ARC.y(ds_ARC.today.i:end),ds_ARC.yp{1}(ds_ARC.today.i:end));
+fprintf("error = %.4f\n",err)
+mtlresp = ds_ARC.yp{1};
+dlmwrite('mtlrsp.txt',mtlresp);
 
 
 

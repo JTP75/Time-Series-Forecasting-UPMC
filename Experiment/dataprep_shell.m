@@ -63,9 +63,13 @@ if doValidation
     y_train = y(Lag(end)+1:vd,:);
     X_valid = X(vd+1:td,:);
     y_valid = y(vd+1:td,:);
+    X_test = X(td+1:end,:);
+    y_test = y(td+1:end,:);
 else
     X_train = X(Lag(end)+1:td,:);
     y_train = y(Lag(end)+1:td,:);
+    X_test = X(td+1:end,:);
+    y_test = y(td+1:end,:);
 end
 
 % generate cell arrays
@@ -74,15 +78,16 @@ Xc_train = mat2cellR(X_train);
 if doValidation
     Xc_valid = mat2cellR(X_valid);
 end
+Xc_test = mat2cellR(X_test);
 
 % generate output structs
 if doValidation
-    Xr = struct( 'all',{Xc_all} , 'train',{Xc_train} , 'valid',{Xc_valid} , ...
-                 'all_num',{X_all} , 'train_num',{X_train} , 'valid_num',{X_valid} );
-    Yr = struct( 'all',y_all , 'train',y_train , 'valid',y_valid );
+    Xr = struct( 'all',{Xc_all} , 'train',{Xc_train} , 'valid',{Xc_valid} , 'test',{Xc_test},...
+                 'all_num',{X_all} , 'train_num',{X_train} , 'valid_num',{X_valid}, 'test_num',{X_test} );
+    Yr = struct( 'all',y_all , 'train',y_train , 'valid',y_valid , 'test',y_test );
 else
-    Xr = struct( 'all',{Xc_all} , 'train',{Xc_train} , ...
-                 'all_num',{X_all} , 'train_num',{X_train} );
+    Xr = struct( 'all',{Xc_all} , 'train',{Xc_train} , 'test',{Xc_test},...
+                 'all_num',{X_all} , 'train_num',{X_train}, 'test_num',{X_test} );
     Yr = struct( 'all',y_all , 'train',y_train );
 end
 centers = struct( 'muL',mu_L , 'sigL',sig_L , 'muR',mu_R , 'sigR',sig_R , 'muP',mu_P , 'sigP',sig_P );

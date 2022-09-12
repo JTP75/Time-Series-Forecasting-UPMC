@@ -216,7 +216,6 @@ class Forecaster:
         lagmat = f.lagmatrix(self.daymat,nlags)      # first 14 rows contain NaNs
         daymat = self.daymat
         lagmat_cropped = lagmat[nlags:,:]
-        np.savetxt('lagmat.txt',lagmat,delimiter='\t')
 
         # pre-pca lag centering
         self.muL = np.mean(lagmat_cropped[:date_idx,:],0)
@@ -240,7 +239,7 @@ class Forecaster:
         X = (X - muP) / sigP
 
         # full network tensors
-        self.X = X
+        self.X = np.reshape(X,(X.shape[0],X.shape[1],1,1))
         self.y = y[nlags:]
 
     def set_split(self,date):
