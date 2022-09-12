@@ -27,7 +27,8 @@ print("Load successful!")
 print("")
 fc = ClassDefs.Forecaster(mf)
 fc.set_split(ClassDefs.Date(7,9,2021))
-print("Today is", fc.td.dtstr(),"\n(i.e. this is the last day in the training set)")
+print("Today is", fc.td.dtstr(),"at index", fc.td_idx, "\n(i.e. this is the last day in the training set)")
+
 
 # ===================================================================================================================================================================
 print("")
@@ -50,13 +51,7 @@ dp = 93
 df = 0.21244
 steps_per_epoch = int(fc.X.shape[0]/minibatch_size)
 
-LR_schedule = f.LR_scheduler(
-  LR_base,
-  max_epochs,
-  steps_per_epoch,
-  df,
-  dp
-)
+LR_schedule = RNNA.LR_scheduler(LR_base,max_epochs,steps_per_epoch,df,dp)
 
 try:
   mdl.compile(
@@ -66,6 +61,7 @@ try:
   )
 except:
   print(tb.format_exc())
+  exit()
 
 '''
 
@@ -84,6 +80,6 @@ except:
 
 
 
-
+print("\n\nExecution Successful!\n\n")
 
 

@@ -91,5 +91,5 @@ def LR_scheduler(LR_base,max_epochs,steps_per_epoch,drop_factor,drop_period):
     for i in range(ndrops):
         boundaries.append( (i+1) * drop_period * steps_per_epoch )
         values.append( LR_base * drop_factor**(i+1) )
-    return tf.keras.optimzers.schedules.PiecewiseConstantDecay(boundaries=boundaries,values=values)
+    return tf.keras.optimizers.schedules.PiecewiseConstantDecay(boundaries=boundaries,values=values)
             

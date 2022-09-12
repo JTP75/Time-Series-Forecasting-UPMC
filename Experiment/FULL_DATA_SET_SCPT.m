@@ -69,13 +69,13 @@ ds_ARC = ds_ARC.pushResp(y_prediction,lbl);
 [Xr,Yr,C,T] = dataprep_shell(ds_base,'Validate',false,'Lags',1:14,'PCApcnt',[0.90,0.90]);
 NET_architectures;
 %% trane
-net = train_network(Xr,Yr);
+net = train_network(Xr,Yr,'Plot',true);
 %% predic
 yp = predict_net(net,Xr.all,C,T);
 ds_ARC = ds_ARC.pushResp(yp,'RNN0 Bayesian Opt');
 
 %% ======================================================================== PLOT =============================================
-atestfig = ds_ARC.plot('Network Predictors', 'tmr', 16, 'Showmean', false);
+atestfig = ds_ARC.plot('RNN0 Predictor', 'tmr+9', 16, 'Showmean', false);
 arcacc = ds_ARC.getaccs('test',1);
 fprintf('\n===========================\n')
 for i = 1:size(arcacc,1)

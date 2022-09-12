@@ -210,21 +210,22 @@ class Forecaster:
         
         self.prepdata()
         
-    def prepdata(self,PCALpcnt=0.90,PCARpcnt=0.90):
+    def prepdata(self,PCALpcnt=0.90,PCARpcnt=0.90,date_idx=1108):
         # lagmatrix 
         nlags = 14
         lagmat = f.lagmatrix(self.daymat,nlags)      # first 14 rows contain NaNs
         daymat = self.daymat
         lagmat_cropped = lagmat[nlags:,:]
+        np.savetxt('lagmat.txt',lagmat,delimiter='\t')
 
         # pre-pca lag centering
-        self.muL = np.mean(lagmat_cropped,0)
-        self.sigL = np.std(lagmat_cropped,0)
+        self.muL = np.mean(lagmat_cropped[:date_idx,:],0)
+        self.sigL = np.std(lagmat_cropped[:date_idx,:],0)
         LMC_cent = (lagmat_cropped - self.muL) / self.sigL
         
         # pre-pca resp centering
-        self.muR = np.mean(daymat,0)
-        self.sigR = np.std(daymat,0)
+        self.muR = np.mean(daymat[:date_idx,:],0)
+        self.sigR = np.std(daymat[:date_idx,:],0)
         daymat_cent = (daymat - self.muR) / self.sigR
 
         # pca
@@ -234,8 +235,8 @@ class Forecaster:
         # network tensors
         X = np.dot(LMC_cent, transformL.T)
         y = np.dot(daymat_cent, transformR.T)
-        muP = np.mean(X,0)
-        sigP = np.std(X,0)
+        muP = np.mean(X[:date_idx,:],0)
+        sigP = np.std(X[:date_idx,:],0)
         X = (X - muP) / sigP
 
         # full network tensors

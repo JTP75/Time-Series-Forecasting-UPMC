@@ -54,7 +54,7 @@ def lagmatrix(A,lag_vals):
         lag_vals = range(lag_vals)
     LM = np.empty([ A.shape[0], A.shape[1] * len(lag_vals) ])
     for i in range(len(lag_vals)):
-        LM[ (i+1): , (n*i):(n*(i+1)) ] = A[i+1:,:]
+        LM[ (i+1): , (n*i):(n*(i+1)) ] = A[:A.shape[0]-i-1,:]
     return LM
 
 

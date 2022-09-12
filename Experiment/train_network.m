@@ -11,6 +11,7 @@ end
 solver = "adam";
 default_layers = true;
 default_options = true;
+doplot = false;
 
 % process arguments
 for arg_idx = 1:2:length(varargin)
@@ -20,7 +21,14 @@ for arg_idx = 1:2:length(varargin)
     elseif strcmp('Options',varargin{arg_idx})
         options = varargin{arg_idx+1};
         default_options = false;
+    elseif strcmp('Plot',varargin{arg_idx})
+        doplot = varargin{arg_idx+1};
     end
+end
+if doplot
+    plotstr = 'training-progress';
+else
+    plotstr = 'none';
 end
 
 % network architecture
@@ -74,7 +82,8 @@ if default_options
         'MiniBatchSize',        64,...                          % nObs per iteration
         'Verbose',              true,...                        % whether to show info
         'Shuffle',              "every-epoch",...               % shuffle data
-        'ExecutionEnvironment', mydevice...                     % gpu
+        'ExecutionEnvironment', mydevice,...                    % gpu
+        'Plots',                plotstr...                      % whether to plot 
     );
 end
 
