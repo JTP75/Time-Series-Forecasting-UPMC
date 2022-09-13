@@ -13,6 +13,8 @@ def test_env():
 # python "C:\Users\pacel\Desktop\ML_Work\UPMC\UPMC_ML_Research\Python Implementation\RNN_architecture.py"
 
 def build_net(feat_count, resp_count):
+    rec_init = 'HeUniform'
+    
     # layers
     input_layer = tf.keras.Input(name='input', shape=(feat_count,1,1))
     flatten_layer = tf.keras.layers.Flatten(name='flatten')
@@ -23,17 +25,17 @@ def build_net(feat_count, resp_count):
     reshape5 = tf.keras.layers.Reshape((188*2,1),name="resh5")
     reshape6 = tf.keras.layers.Reshape((41*2,1),name="resh6")
     reshape7 = tf.keras.layers.Reshape((41*2,1),name="resh7")
-    gru1 = tf.keras.layers.GRU(191,name='gru1',recurrent_initializer='HeNormal')
-    gru2 = tf.keras.layers.LSTM(107,name='gru2',recurrent_initializer='HeNormal')
+    gru1 = tf.keras.layers.GRU(191,name='gru1',recurrent_initializer=rec_init)
+    gru2 = tf.keras.layers.LSTM(107,name='gru2',recurrent_initializer=rec_init)
     drop1 = tf.keras.layers.Dropout(0.22651,name='drop1')
     drop2 = tf.keras.layers.Dropout(0.22651,name='drop2')
     drop3 = tf.keras.layers.Dropout(0.22651,name='drop3')
     drop4 = tf.keras.layers.Dropout(0.22651,name='drop4')
-    bil1 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(188,recurrent_initializer='HeNormal'),name='bil1')
-    bil2 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(188,recurrent_initializer='HeNormal'),name='bil2')
-    bil3 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(41,recurrent_initializer='HeNormal'),name='bil3')
-    bil4 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(41,recurrent_initializer='HeNormal'),name='bil4')
-    bil5 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(9,recurrent_initializer='HeNormal'),name='bil5')
+    bil1 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(188,recurrent_initializer=rec_init),name='bil1')
+    bil2 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(188,recurrent_initializer=rec_init),name='bil2')
+    bil3 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(41,recurrent_initializer=rec_init),name='bil3')
+    bil4 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(41,recurrent_initializer=rec_init),name='bil4')
+    bil5 = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(9,recurrent_initializer=rec_init),name='bil5')
     fullconnect_layer = tf.keras.layers.Dense(resp_count,name='output')
     
     mdl = tf.keras.Sequential()

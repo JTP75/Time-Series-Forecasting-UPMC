@@ -228,15 +228,15 @@ class Forecaster:
         daymat_cent = (daymat - self.muR) / self.sigR
 
         # pca
-        transformL = f.PCA(LMC_cent,PCALpcnt)
-        transformR = f.PCA(daymat_cent,PCARpcnt)
+        self.transformL = f.PCA(LMC_cent,PCALpcnt)
+        self.transformR = f.PCA(daymat_cent,PCARpcnt)
         
         # network tensors
-        X = np.dot(LMC_cent, transformL.T)
-        y = np.dot(daymat_cent, transformR.T)
-        muP = np.mean(X[:date_idx,:],0)
-        sigP = np.std(X[:date_idx,:],0)
-        X = (X - muP) / sigP
+        X = np.dot(LMC_cent, self.transformL.T)
+        y = np.dot(daymat_cent, self.transformR.T)
+        self.muP = np.mean(X[:date_idx,:],0)
+        self.sigP = np.std(X[:date_idx,:],0)
+        X = (X - self.muP) / self.sigP
 
         # full network tensors
         self.X = np.reshape(X,(X.shape[0],X.shape[1],1,1))

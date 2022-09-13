@@ -57,7 +57,7 @@ def lagmatrix(A,lag_vals):
         LM[ (i+1): , (n*i):(n*(i+1)) ] = A[:A.shape[0]-i-1,:]
     return LM
 
-def rmse_cent(A,B):
+def mse_cent(A,B):
     A = (A - np.mean(A)) / np.std(A)
     B = (B - np.mean(B)) / np.std(B)
     return np.mean((A-B)**2)
