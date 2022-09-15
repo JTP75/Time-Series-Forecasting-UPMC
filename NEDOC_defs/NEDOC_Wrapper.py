@@ -285,7 +285,7 @@ class NEDOC_Wrapper(__netwrapper__):
         pass
         
     def assess(self):
-        
+        pass
         
         
         
