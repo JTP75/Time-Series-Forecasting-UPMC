@@ -83,7 +83,8 @@ if default_options
         'Verbose',              true,...                        % whether to show info
         'Shuffle',              "every-epoch",...               % shuffle data
         'ExecutionEnvironment', mydevice,...                    % gpu
-        'Plots',                plotstr...                      % whether to plot 
+        'Plots',                plotstr,...                     % whether to plot 
+        'GradientDecayFactor',  0.95...
     );
 end
 
