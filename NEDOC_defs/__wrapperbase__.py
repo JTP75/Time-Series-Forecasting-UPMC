@@ -13,9 +13,9 @@ class __wrapperbase__(abc.ABC):
 
     @abc.abstractmethod
     def __init__(self):
-        self.X = None
-        self.Y = None
-        self.YP = None
+        self.X = IO_Struct()
+        self.Y = IO_Struct()
+        self.prediction = IO_Struct()
         
     @abc.abstractmethod
     def set(self):
@@ -26,7 +26,7 @@ class __wrapperbase__(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def deprep(self):
+    def rect(self):
         pass
 
     @abc.abstractmethod
