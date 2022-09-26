@@ -1,12 +1,10 @@
 %% ======================================================================== FULL DATA SET (288 obs per day) ===================
-load FULL_IMPUTED.mat
+load PUH_NEDOC_imputed_set.mat
 ds_base = NedocData(TI_full,288);
 ds_base = ds_base.setToday(0.95);
 ds_base = ds_base.setPPD(48);
-ds_ARC = ds_base;
-ds_RNN0 = ds_base;
 ppd = ds_base.PPD;
-disp('.')
+disp('Loaded data set into class object.\n')
 
 %% ======================================================================== PCA ===============================================
 
@@ -72,10 +70,10 @@ NET_architectures;
 net = train_network(Xr,Yr,'Plot',false);
 %% predic
 yp = predict_net(net,Xr.all,C,T);
-ds_ARC = ds_ARC.pushResp(yp,'RNN2');
+ds_ARC = ds_ARC.pushResp(yp,'RNN0');
 
 %% ======================================================================== PLOT =============================================
-atestfig = ds_ARC.plot('RNN0 Predictor', 'tmr', 16, 'Showmean', false);
+atestfig = ds_ARC.plot('RNN0 Predictor', '12/21/2021', 16, 'Showmean', false);
 arcacc = ds_ARC.getaccs('test',1);
 fprintf('\n===========================\n')
 for i = 1:size(arcacc,1)

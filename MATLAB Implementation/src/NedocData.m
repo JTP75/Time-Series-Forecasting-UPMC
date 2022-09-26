@@ -1,4 +1,4 @@
-classdef NedocData
+classdef NedocData < handle
     
     properties
         % tables
@@ -312,7 +312,7 @@ classdef NedocData
                 idcurr = dayIdcs(dayLen) + 1;
             end
         end
-        function accs = getaccs(o, setspec, tolerance)
+        function accs = performance(o, setspec, tolerance)
             if strcmp(setspec,'train')
                 idcs = 1:o.today.i;
             elseif strcmp(setspec,'test')
@@ -347,6 +347,9 @@ classdef NedocData
                 end
             end
         end
+        function ststr = get_statstr(o)
+            ststr = statdata_str(o.y);
+        end
         
     end
     
@@ -367,3 +370,13 @@ classdef NedocData
     end
     
 end
+
+
+
+
+
+
+
+
+
+

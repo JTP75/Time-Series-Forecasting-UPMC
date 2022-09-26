@@ -17,7 +17,7 @@ Time = TRAW.Time;
 Month = TRAW.Month;
 WKD_Name = w;
 Weekday = weekday(d);
-Score = TRAW.MODIFIED_SCORE_VAL;
+Score = TRAW.SCORE_VAL;
 Level = getLevel(Score);
 
 TCLN = table(Date_Time_DTA, Date_Time, Date, Time, Month, WKD_Name, Weekday, Score, Level);
