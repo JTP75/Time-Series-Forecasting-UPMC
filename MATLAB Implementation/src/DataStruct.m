@@ -21,9 +21,9 @@ classdef DataStruct < handle
             end
         end
         function obj = setsplits(obj,trvl,vlts)
-            obj.train = obj.all(1:trvl);
-            obj.valid = obj.all(trvl+1:vlts);
-            obj.test = obj.all(vlts+1:end);
+            obj.train = obj.all(1:trvl,:);
+            obj.valid = obj.all(trvl+1:vlts,:);
+            obj.test = obj.all(vlts+1:end,:);
         end
     end
 end

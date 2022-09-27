@@ -35,7 +35,7 @@ classdef network_interface < handle
             obj.postprocess;
         end
     end
-    methods(Abstract,Access=protected)
+    methods(Abstract,Access=public)
         obj = preprocess(obj,varargin)
         obj = postprocess(obj,varargin)
     end

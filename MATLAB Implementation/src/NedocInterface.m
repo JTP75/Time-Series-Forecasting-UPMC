@@ -10,7 +10,8 @@ classdef NedocInterface < network_interface
         nDays
         trvl_date
         vlts_date
-        lag
+        lag_vector
+        PCA_pcnts
         
         % raw matrix forms
         Ym
@@ -37,42 +38,45 @@ classdef NedocInterface < network_interface
             
             obj.Ym = DataStruct(dm);
             obj.Ymp = DataStruct();
+            
+            obj.centers = {};
+            obj.transforms = {};
         end
         function obj = setsplits(obj,trvl,vlts)
             if isa(trvl,'datetime')
                 obj.trvl_date = trvl;
-                iTV = find(obj.date==trvl);
+                iTV = find(obj.date.all==trvl);
             elseif isa(trvl,'double')
                 if 0 <= trvl && trvl <= 1
                     iTV = round(obj.nDays*trvl);
-                    obj.trvl_date = obj.date(iTV);
+                    obj.trvl_date = obj.date.all(iTV);
                 else
                     iTV = trvl;
-                    obj.trvl_date = obj.date(iTV);
+                    obj.trvl_date = obj.date.all(iTV);
                 end
             else
                 error("Invalid datatype for trvl argument")
             end
             if isa(vlts,'datetime')
                 obj.vlts_date = vlts;
-                iVT = find(obj.date==vlts);
+                iVT = find(obj.date.all==vlts);
             elseif isa(vlts,'double')
                 if 0 <= vlts && vlts <= 1
                     iVT = round(obj.nDays*vlts);
-                    obj.vlts_date = obj.date(iVT);
+                    obj.vlts_date = obj.date.all(iVT);
                 else
                     iVT = vlts;
-                    obj.vlts_date = obj.date(vlts);
+                    obj.vlts_date = obj.date.all(vlts);
                 end
             else
                 error("Invalid datatype for vlts argument")
             end
             
             obj.Ym.setsplits(iTV,iVT);
-            obj.date.setsplit(iTV,iVT);
+            obj.date.setsplits(iTV,iVT);
         end
     end
-    methods(Access=protected)
+    methods(Access=public)
         function obj = setPPD(obj,tbl,NPPD)
             baseppd = 288;
             
@@ -99,26 +103,38 @@ classdef NedocInterface < network_interface
             obj.PPD = NPPD;
         end
         function obj = preprocess(obj,varargin)
-            % default args
-            PCA_pcnt = [0.90 0.90];
-            Lag = 1:14;
-            % varargin proc
-            for arg_idx = 1:2:length(varargin)
-                if strcmp('PCA',varargin{arg_idx})
-                    PCA_pcnt = varargin{arg_idx+1};
-                    if length(PCA_pcnt) == 1
-                        PCA_pcnt = [PCA_pcnt PCA_pcnt]; %#ok<AGROW>
-                    end
-                elseif strcmp('Lags',varargin{arg_idx})
-                    Lag = varargin{arg_idx+1};
-                    if length(Lag) == 1
-                        Lag = 1:Lag;
-                    end
-                end
-            end
-            obj.lag = Lag;
+            % this fcn fills Xr & Yr
+            lag = obj.lag_vector;
+            lastvalid = find(obj.date.all==obj.vlts_date);
+            nontest = 1:lastvalid;
+            omitlag = nontest(max(lag)+1:end);
+            lasttrain = find(obj.date.all==obj.trvl_date);
             
+            % Xr
+            X_proto = lagmatrix(obj.Ym.all,obj.lag_vector);
+            obj.centers{1} = struct('mu',mean(X_proto(omitlag,:)),'sig',std(X_proto(omitlag,:)));
+            X_proto = (X_proto - obj.centers{1}.mu) ./ obj.centers{1}.sig;
+            obj.transforms{1} = PCA(X_proto(omitlag,:),obj.PCA_pcnts(1));
+            X_PCAd = X_proto * obj.transforms{1};
+            obj.centers{3} = struct('mu',mean(X_PCAd(omitlag,:)),'sig',std(X_PCAd(omitlag,:)));
+            X_PCAd = (X_PCAd - obj.centers{3}.mu) ./ obj.centers{3}.sig;
             
+            obj.Xr.all = X_PCAd(lag(end)+1:end,:);
+            obj.Xr.train = X_PCAd(lag(end)+1:lasttrain,:);
+            obj.Xr.valid = X_PCAd(lasttrain+1:lastvalid,:);
+            obj.Xr.test = X_PCAd(lastvalid+1:end,:);
+            
+            % Yr
+            y_proto = obj.Ym.all;
+            obj.centers{2} = struct('mu',mean(y_proto),'sig',std(y_proto));
+            y_proto = (y_proto - obj.centers{2}.mu) ./ obj.centers{2}.sig;
+            obj.transforms{2} = PCA(y_proto(nontest,:),obj.PCA_pcnts(2));
+            y_PCAd = y_proto * obj.transforms{2};
+            
+            obj.Yr.all = y_PCAd(lag(end)+1:end,:);
+            obj.Yr.train = y_PCAd(lag(end)+1:lasttrain,:);
+            obj.Yr.valid = y_PCAd(lasttrain+1:lastvalid,:);
+            obj.Yr.test = y_PCAd(lastvalid+1:end,:);
         end
         function obj = postprocess(obj,varargin)
         end
