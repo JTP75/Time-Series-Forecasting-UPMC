@@ -48,14 +48,9 @@ classdef NedocInterface < network_interface
                 id = "NedocInterface:NotEnoughInputs";
                 throw(MException(id,desc))
             end
-            obj.architecture = arch;
-            obj.opts = opts;
-            obj.preprocess();
-            
         end
-        
     end
-    methods(Access=protected)
+    methods(Access=public)
         function obj = setPPD(obj,tbl,NPPD)
             baseppd = 288;
             
