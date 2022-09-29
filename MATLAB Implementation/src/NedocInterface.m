@@ -138,5 +138,8 @@ classdef NedocInterface < network_interface
         end
         function obj = postprocess(obj,varargin)
         end
+        function obj = plotSubFcn(obj)
+            
+        end
     end
 end
