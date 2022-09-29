@@ -1,14 +1,19 @@
-****************************************************************************
-**-------------------------------- README --------------------------------**
-****************************************************************************
+========================
+------- README ---------
+========================
 
-description:
-    this is a machine learning-based research project for UPMC. my goal is to
-    write a time-series forecasting algorithm to predict the NEDOC Score (which
-    is a measure of busyness) of the emergency department at UPMC Presbyterian.
+Description
+================
+This is a machine learning-based research project for UPMC. The current
+objective is to write an algorithm to forecast the how busy a hospital
+emergency room will be ahead of time.
 
-updates (newest first)
-    (05/26/2022, 10:50AM): uploaded all files to github, including this README
-
+Folders
+================
+Data Items:                 Contains original and modified versions of the data set
+Experiment:                 Unorganized & unoptimized MATLAB scripts, for the purpose of experimentation
+MATLAB Implementation:      Optimized and organized MATLAB code for training models
+Python Implementation:      Python scripts for testing and implementing models trained in MATLAB
+Results:                    Contains a few graphs showing the NEDOC Score predictions for models
 
 
