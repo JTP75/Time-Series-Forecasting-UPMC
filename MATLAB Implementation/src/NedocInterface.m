@@ -1,5 +1,5 @@
 classdef NedocInterface < network_interface
-    properties(Access=private)
+    properties(Access=public)
         % raw data
         table
         date
@@ -41,17 +41,60 @@ classdef NedocInterface < network_interface
             
             obj.centers = {};
             obj.transforms = {};
+            obj.lag_vector = 1:14;
+            obj.PCA_pcnts = [0.9,0.9];
         end
-        function obj = compile(obj,arch,opts)
+        function obj = compile(obj,arch,opts,varargin)
             if nargin < 3
                 desc = "Must specify network architecture and training options";
                 id = "NedocInterface:NotEnoughInputs";
                 throw(MException(id,desc))
             end
-            obj.architecture = arch;
-            obj.opts = opts;
-            obj.preprocess();
             
+            trvl = 0.9;
+            vlts = 0.9;
+            
+            for ii=1:2:numel(varargin), key=varargin{ii}; val=varargin{ii+1};
+                switch(key)
+                    case "Verbose"
+                        opts.Verbose = val;
+                    case "Plot"
+                        if val
+                            opts.Plots = "training-progress";
+                        else
+                            opts.Plots = "none";
+                        end
+                    case "TrainingSplit"
+                        trvl = val;
+                    case "ValidationSplit"
+                        vlts = val;
+                    case "Lags"
+                        if numel(val)==1
+                            obj.lag_vector = 1:val;
+                        else
+                            obj.lag_vector = val;
+                        end
+                    case "PCA"
+                        if numel(val)==2
+                            obj.PCA_pcnts = val;
+                        else
+                            error("Invalid entry for PCA")
+                        end
+                    otherwise
+                        error("varargin key '" + key + "' is invalid")
+                end
+            end
+            
+            if gpuDeviceCount() > 0
+                opts.ExecutionEnvironment = "gpu";
+            else
+                opts.ExecutionEnvironment = "cpu";
+            end
+            
+            obj.architecture = arch;
+            obj.options = opts;
+            obj.setsplits(trvl,vlts)
+            obj.preprocess();
         end
         
     end

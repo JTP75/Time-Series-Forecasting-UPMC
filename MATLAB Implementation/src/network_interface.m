@@ -40,7 +40,7 @@ classdef network_interface < handle
         end
     end
     methods(Abstract,Access=public)
-        obj = compile(obj,arch,opts)
+        obj = compile(obj,arch,opts,varargin)
     end
     methods(Abstract,Access=protected)
         obj = preprocess(obj,varargin)
