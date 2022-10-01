@@ -10,6 +10,9 @@ classdef network_interface < handle
         options             % specifies options
         network             % network object (filled on call to train_net())
         performance_info    % performance info
+        
+        % function handles
+        perfmet
     end
     methods(Access=public)
         function obj = network_interface()
@@ -41,6 +44,7 @@ classdef network_interface < handle
     end
     methods(Abstract,Access=public)
         obj = compile(obj,arch,opts,varargin)
+        fig = plot(obj,varargin)
     end
     methods(Abstract,Access=protected)
         obj = preprocess(obj,varargin)

@@ -96,7 +96,9 @@ classdef NedocInterface < network_interface
             obj.setsplits(trvl,vlts)
             obj.preprocess();
         end
-        
+        function fig = plot(obj,varargin)
+            fig = figure;
+        end
     end
     methods(Access=protected)
         function obj = setPPD(obj,tbl,NPPD)
@@ -192,6 +194,19 @@ classdef NedocInterface < network_interface
             
             obj.Ym.setsplits(iTV,iVT);
             obj.date.setsplits(iTV,iVT);
+        end
+        function dayplt(obj,dt)
+            if isa(dt,"datetime")
+                x = 1;
+            else
+                x = 0;
+            end
+            
+            hold on
+            
+            x = obj.date;
+            
+            holf off
         end
     end
 end
