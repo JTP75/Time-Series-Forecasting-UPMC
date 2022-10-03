@@ -111,9 +111,13 @@ classdef NedocInterface < network_interface
                     throw(MException(id,desc))
                 end
             end
-            obj.performance = J(obj.Ym.all,obj.Ymp.all);
+            perf = struct(...
+                'all_loss',J(obj.Ym.all,obj.Ymp.all),...
+                'training_loss',J(obj.Ym.train,obj.Ymp.train),...
+                'validation_loss',J(obj.Ym.valid,obj.Ymp.valid),...
+                'testing_loss',J(obj.Ym.test,obj.Ymp.test)              );
+            obj.performance = perf;
         end
-        function loss = getloss(obj,)
     end
     methods(Access=protected)
         function obj = setPPD(obj,tbl,NPPD)
