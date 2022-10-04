@@ -93,27 +93,77 @@ classdef NedocInterface < network_interface
             
             obj.architecture = arch;
             obj.options = opts;
-            obj.setsplits(trvl,vlts)
+            obj.setsplits(trvl,vlts);
             obj.preprocess();
         end
         function fig = plot(obj,varargin)
             fig = figure;
         end
-        function obj = assess(obj,varargin)
-            if nargin == 1
-                J = obj.lossFcn;
-            else
-                if isa(optional_fcn,"function_handle")
-                    J = optional_fcn;
-                else
-                    id = "NedocInterface:InvalidArgType";
-                    desc = "Optional_fcn argument must be of type 'function_handle'";
-                    throw(MException(id,desc))
+        function obj = assess(obj)
+            
+        end
+        function [loss,dates] = getLoss(obj,varargin)
+            
+            datetime_arr = NaT([0,1]);
+            dateidx_arr = NaN([0,1]);
+            takeMean = false;
+            lossfcn = obj.lossFcn;
+            
+            for i=1:2:numel(varargin), key=varargin{i}; val=varargin{i+1};
+                switch key
+                    case "DateTimeArray"
+                        if isa(val,'string')
+                            val = datetime(val);
+                        end
+                        datetime_arr = val;
+                        dateidx_arr = [];
+                        for dt = datetime_arr
+                            dateidx_arr(end+1) = find(obj.date.all==dt,1); %#ok<AGROW>
+                        end
+                    case "DateIdxArray"
+                        dateidx_arr = val;
+                        datetime_arr = obj.date.all(dateidx_arr);
+                    case "SetSpec"
+                        switch val
+                            case "all"
+                                datetime_arr = obj.date.all;
+                                dateidx_arr = 1:obj.nDays;
+                            case "train"
+                                idx = find(obj.date.all==obj.trvl_date,1);
+                                datetime_arr = obj.date.all(1:idx);
+                                dateidx_arr = 1:idx;
+                            case "valid"
+                                idx1 = find(obj.date.all==obj.trvl_date,1)+1;
+                                idx2 = find(obj.date.all==obj.vlts_date,1);
+                                datetime_arr = obj.date.all(idx1:idx2);
+                                dateidx_arr = idx1:idx2;
+                            case "test"
+                                idx = find(obj.date.all==obj.vlts_date,1)+1;
+                                datetime_arr = obj.date.all(idx:end);
+                                dateidx_arr = idx:obj.nDays;
+                            otherwise
+                                error("'" + val + "' is not a valid set specifier.")
+                        end
+                    case "TakeMean"
+                        takeMean = val;
+                    case "LossFcn"
+                        lossfcn = val;
+                    otherwise
+                        error("'" + key + "' is not a valid varargin key.");
                 end
             end
-            obj.performance = J(obj.Ym.all,obj.Ymp.all);
+            if isempty(datetime_arr) || isempty(dateidx_arr)
+                error("Error! Must specify dates to compute loss.")
+            end
+            
+            dates = datetime_arr;
+            
+            loss = lossfcn(obj.Ym.all(dateidx_arr,:),obj.Ymp.all(dateidx_arr,:));
+            
+            if takeMean
+                loss = mean(loss);
+            end
         end
-        function loss = getloss(obj,)
     end
     methods(Access=protected)
         function obj = setPPD(obj,tbl,NPPD)
@@ -229,19 +279,6 @@ classdef NedocInterface < network_interface
             
             obj.Ym.setsplits(iTV,iVT);
             obj.date.setsplits(iTV,iVT);
-        end
-        function dayplt(obj,dt)
-            if isa(dt,"datetime")
-                x = 1;
-            else
-                x = 0;
-            end
-            
-            hold on
-            
-            x = obj.date;
-            
-            holf off
         end
     end
 end

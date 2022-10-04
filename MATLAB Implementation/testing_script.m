@@ -3,14 +3,13 @@ load('mdl/RNN_001/architecture.mat');
 load('mdl/RNN_001/options.mat');
 load('mdl/RNN_001/network.mat');
 
-ptor = NedocInterface(TI_full,48);
-ptor.setLossFcn(@nedocLoss_01);
-ptor.compile(layers,opts);
+IFC = NedocInterface(TI_full,48);
+IFC.setLossFcn(@nedocLoss_01);
+IFC.compile(layers,opts);
 
-ptor.network = net;
-ptor.response;
+IFC.network = net;
+IFC.response();
 
-ptor.assess;
 
 
 
