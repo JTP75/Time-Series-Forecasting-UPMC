@@ -117,24 +117,15 @@ classdef NedocInterface < network_interface
             
             fprintf("Done!\n\n")
         end
-        function saveNet(obj,netname,netnum)
-            %
+        function obj = saveNet(obj,netname,netnum)
             % name of dir is "{netname}_{netnum:leadingZeros}"
-            %
             
             name = netname + "_" + num2str(netnum,"%03d");
-            
-            % keep naming conventions
-            net = obj.network;
-            layers = obj.architecture;
-            opts = obj.options;
             
             fl = fullfile(pwd,"mdl",name);
             mkdir(fl);
             
-            save(fullfile(fl,"network.mat"),"net");
-            save(fullfile(fl,"architecture.mat"),"layers");
-            save(fullfile(fl,"options.mat"),"opts");
+            
             
             addpath(fl);
         end
