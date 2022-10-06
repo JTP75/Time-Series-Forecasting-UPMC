@@ -9,7 +9,7 @@ IFC = NedocInterface(TI_full,48);
 %% load RNN_001
 IFC.loadNet("RNN",1);
 
-%% set loss fcn
+%% assessing loss fcn
 IFC.setLossFcn(@nedocLoss_01);
 
 

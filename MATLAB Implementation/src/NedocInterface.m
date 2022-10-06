@@ -2,6 +2,7 @@ classdef NedocInterface < network_interface
     properties(Access=public)
         % raw data
         table
+        dateTime
         date
         
         % params
@@ -32,6 +33,10 @@ classdef NedocInterface < network_interface
             obj.nObs = height(obj.table);
             obj.nDays = round(obj.nObs/obj.PPD);
             obj.date = DataStruct(unique(obj.table.Date_Time_DTA,'stable'));
+            serial_datetime = obj.table.Date + obj.table.Time;
+            dateTime_serial_matrix = reshape(serial_datetime,[obj.PPD,obj.nDays])';
+            obj.dateTime = datetime(dateTime_serial_matrix,...              floating comment
+                'ConvertFrom','datenum','Format','M/d/yyyy,H:mm');
             
             scorevect = obj.table.Score;
             dm = reshape(scorevect,[obj.PPD,obj.nDays])';
@@ -94,7 +99,33 @@ classdef NedocInterface < network_interface
             obj.preprocess();
         end
         function fig = plot(obj,varargin)
-            fig = figure;
+            datetime_arr = NaT([0,1]);
+            dateidx_arr = NaN([0,1]);
+            for i=1:2:numel(varargin), key=varargin{i}; val=varargin{i+1};
+                switch key
+                    case "DateTimeArray"
+                        if isa(val,'string')
+                            val = datetime(val);
+                        end
+                        datetime_arr = val;
+                        dateidx_arr = [];
+                        for dt = datetime_arr
+                            dateidx_arr(end+1) = find(obj.date.all==dt,1); %#ok<AGROW>
+                        end
+                    case "DateIdxArray"
+                        dateidx_arr = val;
+                        datetime_arr = obj.date.all(dateidx_arr);
+                    otherwise
+                        error("'" + key + "' is not a valid varargin key.");
+                end
+            end
+            if isempty(datetime_arr) || isempty(dateidx_arr)
+                error("Error! Must specify dates to compute loss.")
+            end
+            
+            for dateidx = dateidx_arr
+                plot
+            end
         end
         function obj = assess(obj)
             
