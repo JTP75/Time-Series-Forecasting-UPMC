@@ -10,7 +10,7 @@ IFC.compile();
 %% load RNN_001
 IFC.loadNet("RNN",1);
 IFC.response();
-IFC.plot("DateTimeRange",["12/1/2021","12/16/2021"]);
+IFC.plot("DateIdxRange",[]);
 
 %% assessing loss fcn
 IFC.setLossFcn(@nedocLoss_01);

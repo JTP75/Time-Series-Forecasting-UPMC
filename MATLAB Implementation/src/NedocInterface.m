@@ -99,8 +99,11 @@ classdef NedocInterface < network_interface
             obj.preprocess();
         end
         function fig = plot(obj,varargin)
+            
             datetime_arr = NaT([0,1]);
             dateidx_arr = NaN([0,1]);
+            showcost = false;
+            
             for i=1:2:numel(varargin), key=varargin{i}; val=varargin{i+1};
                 switch key
                     case "DateTimeArray"
@@ -115,17 +118,50 @@ classdef NedocInterface < network_interface
                     case "DateIdxArray"
                         dateidx_arr = val;
                         datetime_arr = obj.date.all(dateidx_arr);
+                    case "DateTimeRange"
+                        if isa(val,'string')
+                            val = datetime(val);
+                        end
+                        datetime_arr = val(1):caldays(1):val(2);
+                        dateidx_arr = [];
+                        for dt = datetime_arr
+                            dateidx_arr(end+1) = find(obj.date.all==dt,1); %#ok<AGROW>
+                        end
+                    case "DateIdxRange"
+                        dateidx_arr = val(1):val(2);
+                        datetime_arr = obj.date.all(dateidx_arr);
+                    case "ShowCost"
+                        showcost = val;
                     otherwise
                         error("'" + key + "' is not a valid varargin key.");
                 end
             end
             if isempty(datetime_arr) || isempty(dateidx_arr)
-                error("Error! Must specify dates to compute loss.")
+                error("Error! Must specify dates to plot.")
             end
             
-            for dateidx = dateidx_arr
-                plot
+            fig = figure();
+            sub_dim = ceil(sqrt(numel(dateidx_arr)));
+            if showcost
+                costs = obj.getLoss("DateIdxArray",dateidx_arr);
             end
+            
+            for ii = 1:numel(dateidx_arr), i=dateidx_arr(ii);
+                subplot(sub_dim,sub_dim,ii)
+                hold on
+                plot(obj.dateTime(i,:),obj.Ym.all(i,:))
+                plot(obj.dateTime(i,:),obj.Ymp.all(i,:))
+                titlestr = datestr(obj.date.all(i));
+                if showcost
+                    titlestr = titlestr + " : cost=" + num2str(costs(i));
+                end
+                title(titlestr)
+                xlabel("Time")
+                ylabel("NEDOC Score")
+                ylim([0,300])
+                hold off
+            end
+            
         end
         function obj = assess(obj)
             
@@ -135,7 +171,7 @@ classdef NedocInterface < network_interface
             
             name = netname + "_" + num2str(netnum,"%03d");
             fprintf("Loading network, architecture, and options files from: 'mdl/"...
-                + name + "'...\n")
+                + name + "'...\t")
             try
                 [net,arch,opts] = loadnet(name);
             catch e

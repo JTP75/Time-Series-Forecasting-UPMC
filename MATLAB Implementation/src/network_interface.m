@@ -46,6 +46,7 @@ classdef network_interface < handle
             if isempty(varargin)
                 varargin = {"MiniBatchSize",64};
             end
+            fprintf("Executing Forward Propagation Routine...\t")
             obj.Yrp.all = predict(obj.network,obj.Xr.all,varargin{:});
             obj.Yrp.train = predict(obj.network,obj.Xr.train,varargin{:});
             if ~isempty(obj.Xr.valid)
@@ -54,6 +55,7 @@ classdef network_interface < handle
                 obj.Yrp.valid = [];
             end
             obj.Yrp.test = predict(obj.network,obj.Xr.test,varargin{:});
+            fprintf("Done!\n\n")
             obj.postprocess;
         end
     end
