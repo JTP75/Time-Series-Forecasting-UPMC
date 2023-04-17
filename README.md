@@ -1,7 +1,7 @@
 # README
 
 ## Brief
-This is a machine learning-based research project for UPMC. The objective is to write an algorithm to forecast overcrowding in a hospital emergency department.
+This is a machine learning-based research project for UPMC. The objective is to write an algorithm to forecast overcrowding in a hospital emergency department. The main challenge of this project was obtaining accurate predictions from a sparse data set.
 
 ## Info
 See WhitePaper.pdf
